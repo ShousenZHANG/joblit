@@ -16,9 +16,11 @@ from typing import Any, Mapping, Optional
 
 AU_RECALL_SAFE_V1_POLICY_ID = "au-recall-safe-v1"
 AU_RECALL_SAFE_V2_POLICY_ID = "au-recall-safe-v2"
+AU_RECALL_SAFE_V3_POLICY_ID = "au-recall-safe-v3"
 _IMMUTABLE_POLICY_CEILINGS = {
     AU_RECALL_SAFE_V1_POLICY_ID: "mid",
     AU_RECALL_SAFE_V2_POLICY_ID: "senior",
+    AU_RECALL_SAFE_V3_POLICY_ID: "mid",
 }
 
 FETCH_POLICY_MANIFEST_PATH = (
@@ -234,6 +236,11 @@ AU_RECALL_SAFE_V2_POLICY = AU_FETCH_POLICY_REGISTRY.get(
 )
 if AU_RECALL_SAFE_V2_POLICY is None:
     raise FetchPolicyManifestError("AU recall-safe v2 policy is not registered")
+AU_RECALL_SAFE_V3_POLICY = AU_FETCH_POLICY_REGISTRY.get(
+    AU_RECALL_SAFE_V3_POLICY_ID
+)
+if AU_RECALL_SAFE_V3_POLICY is None:
+    raise FetchPolicyManifestError("AU recall-safe v3 policy is not registered")
 ACTIVE_AU_FETCH_POLICY_ID = AU_FETCH_POLICY_MANIFEST.active_policy_id
 ACTIVE_AU_FETCH_POLICY = MappingProxyType(
     AU_FETCH_POLICY_MANIFEST.active_policy.as_config()

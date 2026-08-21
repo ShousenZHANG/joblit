@@ -54,6 +54,9 @@ const AUSchema = z
     queries: queriesField,
     location: z.string().trim().min(1).max(160).optional(),
     hoursOld: z.coerce.number().int().min(1).max(24 * 30).optional(),
+    // Intent only. The stored policy is resolved server-side, so a request can
+    // ask for a stricter run but can never select a weaker policy.
+    excludeSeniorTitles: z.coerce.boolean().optional(),
   })
   .refine((data) => (data.title ?? data.queries?.[0])?.trim(), {
     message: "title is required",
@@ -104,14 +107,17 @@ export async function POST(req: Request) {
           status: "QUEUED",
           market: "AU",
           importedCount: 0,
-          queries: buildAuFetchRunConfigV2({
-            title,
-            baseQueries,
-            queries,
-            location: data.location ?? null,
-            hoursOld: data.hoursOld ?? null,
-            resultsWanted: null,
-          }),
+          queries: buildAuFetchRunConfigV2(
+            {
+              title,
+              baseQueries,
+              queries,
+              location: data.location ?? null,
+              hoursOld: data.hoursOld ?? null,
+              resultsWanted: null,
+            },
+            { excludeSeniorTitles: data.excludeSeniorTitles === true },
+          ),
           location: data.location ?? null,
           hoursOld: data.hoursOld ?? null,
           resultsWanted: null,

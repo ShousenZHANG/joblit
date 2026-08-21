@@ -84,6 +84,70 @@ describe("title seniority policy v2", () => {
   });
 });
 
+describe("title seniority policy v3", () => {
+  const V3 = "au-recall-safe-v3";
+  const decide = (title: string) => {
+    const decision = evaluateTitleSeniorityForPolicy(title, V3);
+    return { outcome: decision.outcome, ruleId: decision.ruleId };
+  };
+
+  it.each([
+    "Senior Software Engineer",
+    "Senior AI Engineer",
+    "Sr. Data Analyst",
+    "Snr Developer",
+    // v2's levelled-role grammar misses these; v3 is meant to catch them.
+    "Senior Associate",
+    "Senior Partner, Digital",
+    "Senior Consultant - Cloud",
+  ])("excludes the visible Senior title %s", (title) => {
+    expect(decide(title)).toEqual({
+      outcome: "EXCLUDE",
+      ruleId: "TITLE_SENIOR",
+    });
+  });
+
+  it.each([
+    "Senior Living Platform Engineer",
+    "Software Engineer, Senior Care Services",
+    "Developer - Senior School Systems",
+  ])("keeps the domain phrase %s", (title) => {
+    expect(decide(title).outcome).toBe("KEEP");
+  });
+
+  it.each([
+    "Graduate Software Engineer",
+    "Junior Data Analyst",
+    "AI Engineer",
+    "Software Developer",
+  ])("keeps the target-level role %s", (title) => {
+    expect(decide(title)).toEqual({
+      outcome: "KEEP",
+      ruleId: "TITLE_ALLOWED",
+    });
+  });
+
+  it("lets early-career wording override Senior", () => {
+    expect(decide("Senior Graduate Program Engineer").outcome).toBe("KEEP");
+  });
+
+  it("keeps excluding Leader, which v1 traded away", () => {
+    expect(decide("Engineering Leader")).toEqual({
+      outcome: "EXCLUDE",
+      ruleId: "TITLE_LEAD",
+    });
+  });
+
+  it("excludes everything v2 excludes, plus Senior", () => {
+    for (const testCase of cases) {
+      const decision = evaluateTitleSeniorityForPolicy(testCase.title, V3);
+      if (testCase.expectedOutcome === "EXCLUDE") {
+        expect(decision.outcome, testCase.name).toBe("EXCLUDE");
+      }
+    }
+  });
+});
+
 describe("title seniority policy v1 compatibility", () => {
   for (const testCase of legacyCases) {
     it(testCase.name, () => {

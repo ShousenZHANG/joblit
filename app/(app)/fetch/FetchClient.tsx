@@ -148,6 +148,7 @@ export function FetchClient() {
   );
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [hoursOld, setHoursOld] = useState(48);
+  const [excludeSeniorTitles, setExcludeSeniorTitles] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const {
@@ -203,12 +204,16 @@ export function FetchClient() {
         title?: string;
         location?: string;
         hoursOld?: number;
+        excludeSeniorTitles?: boolean;
       };
       queueMicrotask(() => {
         if (cancelled) return;
         if (parsed.title) setJobTitle(parsed.title);
         if (parsed.location) setLocation(parsed.location);
         if (parsed.hoursOld) setHoursOld(parsed.hoursOld);
+        if (typeof parsed.excludeSeniorTitles === "boolean") {
+          setExcludeSeniorTitles(parsed.excludeSeniorTitles);
+        }
       });
     } catch {
       // Ignore invalid local preferences.
@@ -222,11 +227,16 @@ export function FetchClient() {
     const timer = window.setTimeout(() => {
       localStorage.setItem(
         "joblit.fetch.preferences",
-        JSON.stringify({ title: jobTitle, location, hoursOld }),
+        JSON.stringify({
+          title: jobTitle,
+          location,
+          hoursOld,
+          excludeSeniorTitles,
+        }),
       );
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [jobTitle, location, hoursOld]);
+  }, [jobTitle, location, hoursOld, excludeSeniorTitles]);
 
   useEffect(() => {
     if (!isSubmitting) return;
@@ -257,6 +267,7 @@ export function FetchClient() {
         queries,
         location,
         hoursOld,
+        excludeSeniorTitles,
       }),
     });
     const json = await response.json().catch(() => ({}));
@@ -462,6 +473,29 @@ export function FetchClient() {
               ),
             )}
           </ul>
+          <label
+            htmlFor="fetch-exclude-senior"
+            className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-brand-emerald-200/70 bg-white/60 p-3 dark:border-brand-emerald-800/60 dark:bg-black/20"
+          >
+            <input
+              id="fetch-exclude-senior"
+              type="checkbox"
+              checked={excludeSeniorTitles}
+              onChange={(event) =>
+                setExcludeSeniorTitles(event.target.checked)
+              }
+              data-testid="fetch-exclude-senior"
+              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-emerald-600"
+            />
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold text-foreground">
+                {t("policy.excludeSenior.label")}
+              </span>
+              <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                {t("policy.excludeSenior.hint")}
+              </span>
+            </span>
+          </label>
         </section>
 
         <div className="pt-2" data-testid="fetch-actions">

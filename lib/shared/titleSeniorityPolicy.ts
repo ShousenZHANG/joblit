@@ -9,6 +9,7 @@
 import {
   AU_RECALL_SAFE_V1_POLICY_ID,
   AU_RECALL_SAFE_V2_POLICY_ID,
+  AU_RECALL_SAFE_V3_POLICY_ID,
 } from "./fetchPolicy";
 
 export type TitleSeniorityRuleId =
@@ -71,6 +72,25 @@ const LEGACY_TERM_RULE = new Map<string, ExclusionRuleId>([
 ]);
 
 const SENIOR_ALIASES = new Set(["senior", "sr", "snr"]);
+
+/**
+ * Nouns that make a following "senior" describe WHO IS SERVED rather than the
+ * level of the role. Australian aged-care and education employers advertise
+ * roles like "Senior Living Platform Engineer", where the seniority word is
+ * part of the business domain. The strict senior rule keeps those.
+ */
+const SENIOR_DOMAIN_NOUNS = new Set([
+  "care",
+  "citizen",
+  "citizens",
+  "college",
+  "health",
+  "housing",
+  "living",
+  "school",
+  "secondary",
+  "services",
+]);
 const LEAD_ALIASES = new Set(["lead", "leader"]);
 const V1_POLICY_ENABLED_ALIASES: ReadonlyMap<
   ExclusionRuleId,
@@ -362,6 +382,12 @@ type RuleContext = {
   tokens: readonly Token[];
   hasEarlyCareerConflict: boolean;
   enabledAliases?: ReadonlyMap<ExclusionRuleId, ReadonlySet<string>>;
+  /**
+   * Opt-in for the v3 policy only. When unset, the senior rule keeps its
+   * original levelled-role grammar, so the persisted v1 and v2 contracts
+   * evaluate byte-identically to before this flag existed.
+   */
+  strictSenior?: boolean;
 };
 
 type RuleEvaluator = (context: RuleContext) => TitleSeniorityDecision | null;
@@ -686,10 +712,22 @@ function evaluateSeniorRule(
     ) {
       continue;
     }
-    if (
-      context.hasEarlyCareerConflict ||
-      !matchesLevelledRoleAt(context, index)
-    ) {
+    // A graduate/junior/intern word in the same title always wins: those are
+    // exactly the roles the user is searching for.
+    if (context.hasEarlyCareerConflict) {
+      ambiguousEvidence ??= tokenEvidence(token);
+      continue;
+    }
+    if (context.strictSenior) {
+      // Exclude on the level word alone, except where the next token shows it
+      // names the served population rather than the job level.
+      if (SENIOR_DOMAIN_NOUNS.has(context.tokens[index + 1]?.value ?? "")) {
+        ambiguousEvidence ??= tokenEvidence(token);
+        continue;
+      }
+      return exclude("TITLE_SENIOR", tokenEvidence(token));
+    }
+    if (!matchesLevelledRoleAt(context, index)) {
       ambiguousEvidence ??= tokenEvidence(token);
       continue;
     }
@@ -719,6 +757,7 @@ function evaluateTitleSeniorityWithRules(
   title: string,
   enabledRules: ReadonlySet<ExclusionRuleId>,
   enabledAliases?: ReadonlyMap<ExclusionRuleId, ReadonlySet<string>>,
+  strictSenior?: boolean,
 ): TitleSeniorityDecision {
   const normalizedTitle = normalize(title);
   const tokens = tokenize(normalizedTitle);
@@ -729,6 +768,7 @@ function evaluateTitleSeniorityWithRules(
       CONFLICT_EARLY_CAREER_TOKENS.has(token.value),
     ),
     enabledAliases,
+    strictSenior,
   };
   let ambiguousEvidence: string | null = null;
 
@@ -760,12 +800,26 @@ function evaluateAuRecallSafeV2Title(title: string): TitleSeniorityDecision {
   );
 }
 
+/**
+ * Everything v2 excludes, plus visible Senior titles. Unlike v1 this keeps the
+ * full Lead alias set, so "Leader" stays excluded; v1 traded that away.
+ */
+function evaluateAuRecallSafeV3Title(title: string): TitleSeniorityDecision {
+  return evaluateTitleSeniorityWithRules(
+    title,
+    ALL_EXCLUSION_RULES,
+    undefined,
+    true,
+  );
+}
+
 const TITLE_POLICY_EVALUATORS: ReadonlyMap<
   string,
   (title: string) => TitleSeniorityDecision
 > = new Map([
   [AU_RECALL_SAFE_V1_POLICY_ID, evaluateAuRecallSafeV1Title],
   [AU_RECALL_SAFE_V2_POLICY_ID, evaluateAuRecallSafeV2Title],
+  [AU_RECALL_SAFE_V3_POLICY_ID, evaluateAuRecallSafeV3Title],
 ]);
 
 export function evaluateTitleSeniorityForPolicy(

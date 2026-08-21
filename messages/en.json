@@ -170,7 +170,11 @@
       "seniority": "Junior, mid-level and senior roles are kept. Only explicit Staff, Principal, Lead, Leader, Manager, Architect, Director, Head, VP, Chief and Distinguished titles are excluded; ambiguous titles are kept.",
       "identity": "Only roles explicitly requiring Australian citizenship or permanent residency are excluded; ordinary work-right and no-sponsorship wording is kept.",
       "clearance": "Only roles requiring Baseline, NV1, NV2 or explicit eligibility to obtain an Australian government clearance are excluded; professional security certifications are kept.",
-      "experience": "Years of experience never remove a role."
+      "experience": "Years of experience never remove a role.",
+      "excludeSenior": {
+        "label": "Also exclude Senior titles in this fetch",
+        "hint": "Removes roles whose visible title carries Senior, Sr or Snr. Graduate and junior wording still wins, and domain phrases such as Senior Living or Senior Care are kept."
+      }
     },
     "startFetch": "Start fetch",
     "fetching": "Fetching…",

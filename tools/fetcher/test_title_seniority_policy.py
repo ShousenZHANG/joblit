@@ -14,6 +14,7 @@ from tools.fetcher.fetch_policy import (
     AU_FETCH_POLICY_REGISTRY,
     AU_RECALL_SAFE_V1_POLICY_ID,
     AU_RECALL_SAFE_V2_POLICY_ID,
+    AU_RECALL_SAFE_V3_POLICY_ID,
 )
 
 
@@ -143,6 +144,63 @@ class SharedTitleSeniorityPolicyTests(unittest.TestCase):
         )
 
         self.assertEqual(kept["title"].tolist(), ["Software Engineer"])
+
+
+class RecallSafeV3TitlePolicyTests(unittest.TestCase):
+    """Mirror of the TypeScript v3 suite; both runtimes must agree."""
+
+    def _decide(self, title: str) -> tuple[str, str]:
+        decision = evaluate_title_seniority_for_policy(
+            title, AU_RECALL_SAFE_V3_POLICY_ID
+        )
+        return decision["outcome"], decision["ruleId"]
+
+    def test_excludes_visible_senior_titles(self):
+        for title in (
+            "Senior Software Engineer",
+            "Senior AI Engineer",
+            "Sr. Data Analyst",
+            "Snr Developer",
+            # v2's levelled-role grammar misses these; v3 catches them.
+            "Senior Associate",
+            "Senior Partner, Digital",
+            "Senior Consultant - Cloud",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(
+                    self._decide(title), ("EXCLUDE", "TITLE_SENIOR")
+                )
+
+    def test_keeps_senior_domain_phrases(self):
+        for title in (
+            "Senior Living Platform Engineer",
+            "Software Engineer, Senior Care Services",
+            "Developer - Senior School Systems",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(self._decide(title)[0], "KEEP")
+
+    def test_keeps_target_level_roles(self):
+        for title in (
+            "Graduate Software Engineer",
+            "Junior Data Analyst",
+            "AI Engineer",
+            "Software Developer",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(
+                    self._decide(title), ("KEEP", "TITLE_ALLOWED")
+                )
+
+    def test_early_career_wording_overrides_senior(self):
+        self.assertEqual(
+            self._decide("Senior Graduate Program Engineer")[0], "KEEP"
+        )
+
+    def test_keeps_excluding_leader_which_v1_traded_away(self):
+        self.assertEqual(
+            self._decide("Engineering Leader"), ("EXCLUDE", "TITLE_LEAD")
+        )
 
 
 if __name__ == "__main__":

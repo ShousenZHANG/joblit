@@ -27,6 +27,7 @@ from fetch_policy import (
     AU_FETCH_POLICY_REGISTRY,
     AU_RECALL_SAFE_V1_POLICY_ID,
     AU_RECALL_SAFE_V2_POLICY_ID,
+    AU_RECALL_SAFE_V3_POLICY_ID,
     FetchPolicyManifestError,
     resolve_registered_au_fetch_policy,
 )
@@ -562,7 +563,11 @@ def _fetch_terms(
 
 TITLE_MATCH_MODES = ("strict", "relaxed", "off")
 IMPLEMENTED_AU_RECALL_POLICY_IDS = frozenset(
-    {AU_RECALL_SAFE_V1_POLICY_ID, AU_RECALL_SAFE_V2_POLICY_ID}
+    {
+        AU_RECALL_SAFE_V1_POLICY_ID,
+        AU_RECALL_SAFE_V2_POLICY_ID,
+        AU_RECALL_SAFE_V3_POLICY_ID,
+    }
 )
 
 

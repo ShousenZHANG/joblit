@@ -1489,7 +1489,9 @@ class AuRecallPolicyConfigTests(unittest.TestCase):
 
     def test_registered_but_unimplemented_policy_fails_closed(self):
         config = self._config()
-        future = {**config["policy"], "id": "au-recall-safe-v3"}
+        # A registered-but-unimplemented id must be one the registry does not
+        # pin a ceiling for; au-recall-safe-v3 is now implemented.
+        future = {**config["policy"], "id": "au-recall-safe-v9"}
         config["policy"] = future
         with patch.object(
             rj,

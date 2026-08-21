@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TITLE_MATCH_MODES, resolveTitleMatchMode } from "@/lib/shared/jobRelevance";
 import {
+  AU_EXCLUDE_SENIOR_FETCH_POLICY,
   AU_FETCH_POLICY,
   RegisteredAuFetchPolicySchema,
 } from "@/lib/shared/fetchPolicy";
@@ -112,8 +113,18 @@ type AuFetchRunConfigV2Input = Omit<
   | "source"
 >;
 
+export interface AuFetchRunPolicyIntent {
+  /**
+   * Per-run opt-in to the stricter policy that also removes visible Senior
+   * titles. Callers express intent only; they never choose a policy id, so a
+   * request can tighten the stored policy but can never weaken it.
+   */
+  excludeSeniorTitles?: boolean;
+}
+
 export function buildAuFetchRunConfigV2(
   input: AuFetchRunConfigV2Input,
+  intent: AuFetchRunPolicyIntent = {},
 ): AuFetchRunConfigV2 {
   return AuFetchRunConfigV2Schema.parse({
     ...input,
@@ -122,7 +133,9 @@ export function buildAuFetchRunConfigV2(
     smartExpand: true,
     includeFromQueries: true,
     titleMatch: "relaxed",
-    policy: AU_FETCH_POLICY,
+    policy: intent.excludeSeniorTitles
+      ? AU_EXCLUDE_SENIOR_FETCH_POLICY
+      : AU_FETCH_POLICY,
     source: "jobspy",
   });
 }

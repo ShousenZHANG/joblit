@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { AU_FETCH_POLICY } from "@/lib/shared/fetchPolicy";
+import {
+  AU_EXCLUDE_SENIOR_FETCH_POLICY,
+  AU_FETCH_POLICY,
+} from "@/lib/shared/fetchPolicy";
 import {
   AU_FETCH_RUN_CONFIG_SCHEMA_VERSION,
   FETCH_RUN_CONFIG_SCHEMA_VERSION,
@@ -41,6 +44,50 @@ function auV2Config() {
     resultsWanted: null,
   });
 }
+
+describe("AU FetchRunConfig senior-exclusion intent", () => {
+  it("stamps the active policy when the caller expresses no intent", () => {
+    expect(auV2Config().policy).toEqual(AU_FETCH_POLICY);
+    expect(
+      buildAuFetchRunConfigV2(
+        {
+          title: "Software Engineer",
+          baseQueries: ["Software Engineer"],
+          queries: ["Software Engineer"],
+          location: null,
+          hoursOld: null,
+          resultsWanted: null,
+        },
+        { excludeSeniorTitles: false },
+      ).policy,
+    ).toEqual(AU_FETCH_POLICY);
+  });
+
+  it("stamps the stricter policy when the caller opts in", () => {
+    const config = buildAuFetchRunConfigV2(
+      {
+        title: "Software Engineer",
+        baseQueries: ["Software Engineer"],
+        queries: ["Software Engineer"],
+        location: null,
+        hoursOld: null,
+        resultsWanted: null,
+      },
+      { excludeSeniorTitles: true },
+    );
+
+    expect(config.policy).toEqual(AU_EXCLUDE_SENIOR_FETCH_POLICY);
+    expect(config.policy.seniorityCeiling).toBe("mid");
+    // The run still parses as the current worker contract, so opting in never
+    // forks the schema version.
+    expect(AuFetchRunConfigV2Schema.parse(config)).toEqual(config);
+  });
+
+  it("keeps the opt-in strictly stronger than the default", () => {
+    expect(AU_FETCH_POLICY.seniorityCeiling).toBe("senior");
+    expect(AU_EXCLUDE_SENIOR_FETCH_POLICY.seniorityCeiling).toBe("mid");
+  });
+});
 
 describe("AU FetchRunConfig", () => {
   it("keeps the closed v1 worker contract for historical AU runs", () => {

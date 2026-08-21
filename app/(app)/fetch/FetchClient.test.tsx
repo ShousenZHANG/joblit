@@ -223,8 +223,39 @@ describe("FetchClient", () => {
       ],
       location: "Sydney, New South Wales, Australia",
       hoursOld: 48,
+      excludeSeniorTitles: false,
     });
     expect(body.sourceOptions).toBeUndefined();
+  });
+
+  it("sends the senior-exclusion intent when the operator opts in", async () => {
+    const user = userEvent.setup();
+
+    renderFetch();
+
+    const toggle = screen.getByTestId("fetch-exclude-senior");
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    expect(toggle).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: /start fetch/i }));
+
+    const fetchMock = global.fetch as unknown as {
+      mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> };
+    };
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.find(
+          ([url, init]) => url === "/api/fetch-runs" && init?.method === "POST",
+        ),
+      ).toBeTruthy();
+    });
+    const createCall = fetchMock.mock.calls.find(
+      ([url, init]) => url === "/api/fetch-runs" && init?.method === "POST",
+    );
+    const body = JSON.parse(String(createCall?.[1]?.body ?? "{}"));
+
+    expect(body.excludeSeniorTitles).toBe(true);
   });
 
   it.each([

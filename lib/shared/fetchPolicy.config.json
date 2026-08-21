@@ -17,6 +17,14 @@
       "citizenshipOrPr": "exclude-explicit-required",
       "governmentSecurityClearance": "exclude-required-or-explicitly-eligible-to-obtain",
       "experienceYears": "never-exclude"
+    },
+    "au-recall-safe-v3": {
+      "id": "au-recall-safe-v3",
+      "seniorityCeiling": "mid",
+      "seniorityEvidence": "visible-title-only",
+      "citizenshipOrPr": "exclude-explicit-required",
+      "governmentSecurityClearance": "exclude-required-or-explicitly-eligible-to-obtain",
+      "experienceYears": "never-exclude"
     }
   }
 }

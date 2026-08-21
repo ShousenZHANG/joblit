@@ -111,18 +111,19 @@ describe("AU fetch policy manifest", () => {
   it("resolves an old registered snapshot after the active pointer advances", () => {
     const v1 = rawManifest.policies[AU_RECALL_SAFE_V1_POLICY_ID];
     const v2 = rawManifest.policies[AU_RECALL_SAFE_V2_POLICY_ID];
-    const v3 = { ...v2, id: "au-recall-safe-v3" };
+    // A hypothetical future id, deliberately not one the registry pins a
+    // ceiling for - au-recall-safe-v3 is now a real, ceiling-locked entry.
+    const future = { ...v2, id: "au-recall-safe-v9" };
     const upgraded = parseAuFetchPolicyManifest({
       ...rawManifest,
-      activePolicyId: v3.id,
+      activePolicyId: future.id,
       policies: {
-        [AU_RECALL_SAFE_V1_POLICY_ID]: v1,
-        [AU_RECALL_SAFE_V2_POLICY_ID]: v2,
-        [v3.id]: v3,
+        ...rawManifest.policies,
+        [future.id]: future,
       },
     });
 
-    expect(upgraded.activePolicyId).toBe(v3.id);
+    expect(upgraded.activePolicyId).toBe(future.id);
     expect(
       parseRegisteredAuFetchPolicy(v1, upgraded.policies),
     ).toEqual(v1);

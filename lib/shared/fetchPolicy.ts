@@ -3,9 +3,11 @@ import rawManifest from "./fetchPolicy.config.json";
 
 export const AU_RECALL_SAFE_V1_POLICY_ID = "au-recall-safe-v1" as const;
 export const AU_RECALL_SAFE_V2_POLICY_ID = "au-recall-safe-v2" as const;
+export const AU_RECALL_SAFE_V3_POLICY_ID = "au-recall-safe-v3" as const;
 const IMMUTABLE_POLICY_CEILINGS: Readonly<Record<string, "mid" | "senior">> = {
   [AU_RECALL_SAFE_V1_POLICY_ID]: "mid",
   [AU_RECALL_SAFE_V2_POLICY_ID]: "senior",
+  [AU_RECALL_SAFE_V3_POLICY_ID]: "mid",
 };
 
 /**
@@ -117,6 +119,18 @@ const recallSafeV2Policy =
 if (!recallSafeV2Policy) {
   throw new Error("AU recall-safe v2 policy is not registered");
 }
+const recallSafeV3Policy =
+  AU_FETCH_POLICY_REGISTRY[AU_RECALL_SAFE_V3_POLICY_ID];
+if (!recallSafeV3Policy) {
+  throw new Error("AU recall-safe v3 policy is not registered");
+}
+
+/**
+ * Opt-in stricter policy. Identical to the active policy except that visible
+ * Senior titles are excluded too. Selected per run by user intent, never by a
+ * client-supplied policy id - see the fetch-runs create route.
+ */
+export const AU_EXCLUDE_SENIOR_FETCH_POLICY = recallSafeV3Policy;
 
 const POLICY_SNAPSHOT_FIELDS = [
   "id",

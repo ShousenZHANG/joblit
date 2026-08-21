@@ -16,11 +16,13 @@ try:  # Package-mode tests/imports.
     from .fetch_policy import (
         AU_RECALL_SAFE_V1_POLICY_ID,
         AU_RECALL_SAFE_V2_POLICY_ID,
+        AU_RECALL_SAFE_V3_POLICY_ID,
     )
 except ImportError:  # Direct worker script execution from tools/fetcher.
     from fetch_policy import (
         AU_RECALL_SAFE_V1_POLICY_ID,
         AU_RECALL_SAFE_V2_POLICY_ID,
+        AU_RECALL_SAFE_V3_POLICY_ID,
     )
 
 
@@ -282,6 +284,23 @@ LEGACY_TERM_RULE = {
 }
 
 SENIOR_ALIASES = {"senior", "sr", "snr"}
+
+# Nouns that make a preceding "senior" describe WHO IS SERVED rather than the
+# level of the role. Australian aged-care and education employers advertise
+# roles like "Senior Living Platform Engineer", where the seniority word is
+# part of the business domain. The strict senior rule keeps those.
+SENIOR_DOMAIN_NOUNS = {
+    "care",
+    "citizen",
+    "citizens",
+    "college",
+    "health",
+    "housing",
+    "living",
+    "school",
+    "secondary",
+    "services",
+}
 LEAD_ALIASES = {"lead", "leader"}
 V1_POLICY_ENABLED_ALIASES = {"TITLE_LEAD": {"lead"}}
 
@@ -353,6 +372,10 @@ class _RuleContext(TypedDict):
     tokens: list[_Token]
     has_early_career_conflict: bool
     enabled_aliases: Optional[dict[str, set[str]]]
+    # Opt-in for the v3 policy only. When False the senior rule keeps its
+    # original levelled-role grammar, so the persisted v1 and v2 contracts
+    # evaluate identically to before this flag existed.
+    strict_senior: bool
 
 
 _RuleEvaluator = Callable[[_RuleContext], Optional[TitleSeniorityDecision]]
@@ -629,10 +652,22 @@ def _evaluate_senior_rule(
             "TITLE_SENIOR", value, context["enabled_aliases"]
         ):
             continue
-        if (
-            context["has_early_career_conflict"]
-            or not _matches_levelled_role_at(context, index)
-        ):
+        # A graduate/junior/intern word in the same title always wins: those
+        # are exactly the roles the user is searching for.
+        if context["has_early_career_conflict"]:
+            ambiguous_evidence = ambiguous_evidence or value
+            continue
+        if context["strict_senior"]:
+            # Exclude on the level word alone, except where the next token
+            # shows it names the served population rather than the job level.
+            next_token = context["tokens"][index + 1] if index + 1 < len(
+                context["tokens"]
+            ) else None
+            if next_token is not None and next_token["value"] in SENIOR_DOMAIN_NOUNS:
+                ambiguous_evidence = ambiguous_evidence or value
+                continue
+            return _exclude("TITLE_SENIOR", value)
+        if not _matches_levelled_role_at(context, index):
             ambiguous_evidence = ambiguous_evidence or value
             continue
         return _exclude("TITLE_SENIOR", value)
@@ -656,6 +691,7 @@ def _evaluate_title_seniority_with_rules(
     title: str,
     enabled_rules: set[str],
     enabled_aliases: Optional[dict[str, set[str]]] = None,
+    strict_senior: bool = False,
 ) -> TitleSeniorityDecision:
     normalized_title = _normalize(title)
     tokens = _tokenize(normalized_title)
@@ -666,6 +702,7 @@ def _evaluate_title_seniority_with_rules(
             token["value"] in CONFLICT_EARLY_CAREER_TOKENS for token in tokens
         ),
         "enabled_aliases": enabled_aliases,
+        "strict_senior": strict_senior,
     }
     ambiguous_evidence: Optional[str] = None
 
@@ -703,9 +740,25 @@ def _evaluate_au_recall_safe_v2_title(title: str) -> TitleSeniorityDecision:
     )
 
 
+def _evaluate_au_recall_safe_v3_title(title: str) -> TitleSeniorityDecision:
+    """Everything v2 excludes, plus visible Senior titles.
+
+    Unlike v1 this keeps the full Lead alias set, so "Leader" stays excluded;
+    v1 traded that away.
+    """
+
+    return _evaluate_title_seniority_with_rules(
+        title,
+        ALL_EXCLUSION_RULES,
+        None,
+        True,
+    )
+
+
 _TITLE_POLICY_EVALUATORS = {
     AU_RECALL_SAFE_V1_POLICY_ID: _evaluate_au_recall_safe_v1_title,
     AU_RECALL_SAFE_V2_POLICY_ID: _evaluate_au_recall_safe_v2_title,
+    AU_RECALL_SAFE_V3_POLICY_ID: _evaluate_au_recall_safe_v3_title,
 }
 
 

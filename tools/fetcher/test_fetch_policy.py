@@ -49,20 +49,21 @@ class FetchPolicyManifestTests(unittest.TestCase):
     def test_old_registered_snapshot_survives_an_active_pointer_upgrade(self):
         v1 = self.raw["policies"][AU_RECALL_SAFE_V1_POLICY_ID]
         v2 = self.raw["policies"][AU_RECALL_SAFE_V2_POLICY_ID]
-        v3 = {**v2, "id": "au-recall-safe-v3"}
+        # A hypothetical future id, deliberately not one the registry pins a
+        # ceiling for - au-recall-safe-v3 is now a real, ceiling-locked entry.
+        future = {**v2, "id": "au-recall-safe-v9"}
         upgraded = self._load(
             {
                 **self.raw,
-                "activePolicyId": v3["id"],
+                "activePolicyId": future["id"],
                 "policies": {
-                    AU_RECALL_SAFE_V1_POLICY_ID: v1,
-                    AU_RECALL_SAFE_V2_POLICY_ID: v2,
-                    v3["id"]: v3,
+                    **self.raw["policies"],
+                    future["id"]: future,
                 },
             }
         )
 
-        self.assertEqual(upgraded.active_policy_id, v3["id"])
+        self.assertEqual(upgraded.active_policy_id, future["id"])
         self.assertEqual(
             resolve_registered_au_fetch_policy(v1, upgraded.policies).as_config(),
             v1,
