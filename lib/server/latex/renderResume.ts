@@ -91,20 +91,33 @@ function renderSkills(groups: SkillsGroup[]) {
 
 const renderBullets = sharedRenderBullets;
 
-function formatExperienceMeta(location: string, dates: string) {
-  const loc = location.trim();
-  const when = dates.trim();
-  if (loc && when) {
-    return `${loc} \\\\ ${when}`;
-  }
-  return loc || when || "~";
+/**
+ * Emit an entry header as paired rows rather than two parallel columns.
+ *
+ * Row N of the left column shares one text line with row N of the right
+ * column, so the PDF carries a real space between them. The previous
+ * paracol layout emitted each column as its own text object with no
+ * whitespace, which made naive ATS parsers read
+ * "Junior Integration & Automation AnalystSydney, Australia" and lose both
+ * the title and the employer. Rows whose left and right halves are both
+ * empty are dropped so an entry without a location does not leave a blank
+ * line.
+ */
+function renderEntryHeader(rows: readonly (readonly [string, string])[]) {
+  const body = rows
+    .filter(([left, right]) => left.trim() || right.trim())
+    .map(([left, right]) => `  \\entryrow{${left}}{${right}}`)
+    .join("\n");
+  return `\\begin{onecolentry}\n${body}\n\\end{onecolentry}`;
 }
 
 function renderExperienceBlock(entry: ExperienceEntry) {
-  const meta = formatExperienceMeta(entry.location, entry.dates);
   const linksLine = renderProjectLinks(entry.links ?? []);
   const companyLine = linksLine ? `${entry.company} \\;|\\; ${linksLine}` : entry.company;
-  const header = `\\begin{twocolentry}{\n    ${meta}\n}\n  \\textbf{${entry.title}} \\\\\n  ${companyLine}\n\\end{twocolentry}`;
+  const header = renderEntryHeader([
+    [`\\textbf{${entry.title}}`, entry.location.trim()],
+    [companyLine, entry.dates.trim()],
+  ]);
 
   if (entry.bullets.length === 0) {
     return header;
@@ -122,22 +135,12 @@ function renderExperiences(entries: ExperienceEntry[]) {
     .join("\n");
 }
 
-function formatEducationMeta(location: string, dates: string) {
-  const loc = location.trim();
-  const when = dates.trim();
-  if (loc && when) {
-    return `${loc} \\\\ ${when}`;
-  }
-  return loc || when || "~";
-}
-
 function renderEducationBlock(entry: EducationEntry) {
-  const meta = formatEducationMeta(entry.location, entry.dates);
-  const hasDetail = entry.detail?.trim().length;
-  const detailLine = hasDetail ? `\n  \\textit{${entry.detail}}` : "";
-  const detailBreak = hasDetail ? " \\\\" : "";
-
-  return `\\begin{twocolentry}{\n    ${meta}\n}\n  \\textbf{${entry.schoolDegree}}${detailBreak}${detailLine}\n\\end{twocolentry}`;
+  const detail = entry.detail?.trim() ? `\\textit{${entry.detail}}` : "";
+  return renderEntryHeader([
+    [`\\textbf{${entry.schoolDegree}}`, entry.location.trim()],
+    [detail, entry.dates.trim()],
+  ]);
 }
 
 function renderEducation(entries: EducationEntry[]) {
@@ -154,15 +157,6 @@ function renderEducationSection(entries: EducationEntry[]) {
   return `\\section{Education}\n\\vspace{0.1cm}\n\n${renderEducation(entries)}`;
 }
 
-function formatProjectMeta(location: string, dates: string) {
-  const loc = location.trim();
-  const when = dates.trim();
-  if (loc && when) {
-    return `${loc} \\\\ ${when}`;
-  }
-  return loc || when || "~";
-}
-
 const renderProjectLinks = renderLinks;
 
 function renderProjectStackLine(entry: ProjectEntry) {
@@ -175,10 +169,10 @@ function renderProjectStackLine(entry: ProjectEntry) {
 }
 
 function renderProjectBlock(entry: ProjectEntry) {
-  const meta = formatProjectMeta(entry.location, entry.dates);
-  const stackLine = renderProjectStackLine(entry);
-  const stackSection = stackLine ? ` \\\\\n  ${stackLine}` : "";
-  const header = `\\begin{twocolentry}{\n    ${meta}\n}\n  \\textbf{${entry.name}}${stackSection}\n\\end{twocolentry}`;
+  const header = renderEntryHeader([
+    [`\\textbf{${entry.name}}`, entry.location.trim()],
+    [renderProjectStackLine(entry), entry.dates.trim()],
+  ]);
 
   if (entry.bullets.length === 0) {
     return header;

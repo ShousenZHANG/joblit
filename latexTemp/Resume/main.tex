@@ -16,9 +16,8 @@
 \usepackage{enumitem} 
 \usepackage{fontawesome5} 
 \usepackage{amsmath} 
-\usepackage{changepage} 
-\usepackage{paracol} 
-\usepackage{needspace} 
+\usepackage{changepage}
+\usepackage{needspace}
 \usepackage{iftex}
 
 
@@ -105,28 +104,22 @@
     \end{adjustwidth}
 } % new environment for one column entries
 
-\newenvironment{twocolentry}[2][]{
-    \onecolentry
-    \def\secondColumn{#2}
-    \setcolumnwidth{\fill, 4.5 cm}
-    \begin{paracol}{2}
-}{
-    \switchcolumn \raggedleft \secondColumn
-    \end{paracol}
-    \endonecolentry
-} % new environment for two column entries
-
-\newenvironment{threecolentry}[3][]{
-    \onecolentry
-    \def\thirdColumn{#3}
-    \setcolumnwidth{, \fill, 4.5 cm}
-    \begin{paracol}{3}
-    {\raggedright #2} \switchcolumn
-}{
-    \switchcolumn \raggedleft \thirdColumn
-    \end{paracol}
-    \endonecolentry
-} % new environment for three column entries
+% One header row: left-aligned content, right-aligned meta, SAME text line.
+%
+% This deliberately replaces the previous paracol-based twocolentry. paracol
+% typesets each column as a separate PDF text object, so the left and right
+% runs land with a large coordinate gap and NO whitespace character between
+% them. Naive ATS parsers concatenate runs on a baseline, which produced
+% "Junior Integration & Automation AnalystSydney, Australia" and destroyed
+% both the job-title and employer fields. Verified by extraction test: the
+% \hfill form emits a real space item between the two runs, paracol does not.
+% See also arXiv 2510.09722 on multi-column layouts breaking reading order.
+%
+% Keep both arguments on one line each. Multi-row headers call \entryrow once
+% per row so row N of the left column pairs with row N of the right column.
+\newcommand{\entryrow}[2]{%
+    \leavevmode#1\hfill\mbox{#2}\par
+}
 
 \newenvironment{header}{
     \setlength{\topsep}{0pt}\par\kern\topsep\centering\linespread{1.08}
