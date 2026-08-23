@@ -223,6 +223,59 @@ describe("Resume page", () => {
     expect(screen.getByTestId("resume-section-experience")).toBeInTheDocument();
   });
 
+  /**
+   * Entries used to close each other: opening the second role collapsed the
+   * first, so comparing two of them meant toggling back and forth. Expansion
+   * is now tracked per row id, which also means a reorder or a delete needs
+   * no index remapping to keep the right cards open.
+   */
+  it("keeps several entries open at once and closes them together", async () => {
+    mockEmptyProfileFetch();
+
+    renderResumePage();
+    await screen.findByRole("heading", { name: "Professional experience" });
+
+    // A second role, which historically stole the open slot from the first.
+    fireEvent.click(screen.getByRole("button", { name: /Add (experience|role)/i }));
+
+    const experienceSection = screen.getByTestId("resume-section-experience");
+    const entryToggles = () =>
+      Array.from(
+        // The section's own collapse toggle also carries aria-expanded; only
+        // it has aria-controls, so this selects the entry cards alone.
+        experienceSection.querySelectorAll<HTMLButtonElement>(
+          "button[aria-expanded]:not([aria-controls])",
+        ),
+      );
+
+    // Both cards are open at once — the second no longer displaces the first.
+    expect(entryToggles().map((b) => b.getAttribute("aria-expanded"))).toEqual([
+      "true",
+      "true",
+    ]);
+
+    // Collapse-all only appears while something is open.
+    const collapseAll = screen
+      .getAllByTestId("resume-collapse-all")
+      .find((node) => node.closest('[data-testid="resume-section-experience"]'));
+    expect(collapseAll).toBeDefined();
+
+    fireEvent.click(collapseAll!);
+
+    // Framer keeps exiting nodes mounted for a beat, so assert the state the
+    // user and assistive tech actually observe.
+    expect(entryToggles().map((b) => b.getAttribute("aria-expanded"))).toEqual([
+      "false",
+      "false",
+    ]);
+    // With nothing open the control retires rather than sitting there inert.
+    expect(
+      screen
+        .queryAllByTestId("resume-collapse-all")
+        .some((node) => node.closest('[data-testid="resume-section-experience"]')),
+    ).toBe(false);
+  });
+
   it("adds experience bullets on the production experience section", async () => {
     mockEmptyProfileFetch();
 

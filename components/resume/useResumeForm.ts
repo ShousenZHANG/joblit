@@ -26,8 +26,39 @@ import {
   hasBullets,
   normalizeBullets,
   normalizeCommaItems,
-  remapFocusedIndex,
 } from "./utils";
+
+/** The four sections whose entries are repeatable and individually openable. */
+export type ExpandableSection =
+  | "experience"
+  | "project"
+  | "education"
+  | "skill";
+
+type ExpansionState = Readonly<Record<ExpandableSection, ReadonlySet<string>>>;
+
+const emptyExpansion = (): ExpansionState => ({
+  experience: new Set<string>(),
+  project: new Set<string>(),
+  education: new Set<string>(),
+  skill: new Set<string>(),
+});
+
+/**
+ * Open the first entry of each list, which is what the editor has always done
+ * on a fresh load: an all-collapsed form reads as empty even when it is full.
+ */
+const initialExpansion = (rows: {
+  experience: readonly { rowId: string }[];
+  project: readonly { rowId: string }[];
+  education: readonly { rowId: string }[];
+  skill: readonly { rowId: string }[];
+}): ExpansionState => ({
+  experience: new Set(rows.experience[0] ? [rows.experience[0].rowId] : []),
+  project: new Set(rows.project[0] ? [rows.project[0].rowId] : []),
+  education: new Set(rows.education[0] ? [rows.education[0].rowId] : []),
+  skill: new Set(rows.skill[0] ? [rows.skill[0].rowId] : []),
+});
 
 export function useResumeForm(locale: string) {
   const [basics, setBasics] = useState<ResumeBasics>(emptyBasics);
@@ -37,8 +68,53 @@ export function useResumeForm(locale: string) {
   const [projects, setProjects] = useState<ResumeProject[]>([emptyProject()]);
   const [education, setEducation] = useState<ResumeEducation[]>([emptyEducation()]);
   const [skills, setSkills] = useState<ResumeSkillGroup[]>([emptySkillGroup()]);
-  const [expandedExperienceIndex, setExpandedExperienceIndex] = useState(0);
-  const [expandedProjectIndex, setExpandedProjectIndex] = useState(0);
+  /**
+   * Which repeatable entries are open, per list section, keyed by the row's
+   * stable `rowId`.
+   *
+   * Two changes from the original single-index model. Entries no longer close
+   * each other: comparing two roles meant reopening one, reading it, and
+   * reopening the other, which is the shape of the work this editor exists
+   * for. And identity moved from position to `rowId`, so a drag or a delete
+   * needs no index remapping at all — the old `remapFocusedIndex` arithmetic
+   * (and every off-by-one it could carry) simply has nothing left to do.
+   */
+  const [expandedRowIds, setExpandedRowIds] = useState<
+    Readonly<Record<ExpandableSection, ReadonlySet<string>>>
+  >(() => emptyExpansion());
+
+  const toggleRowExpanded = useCallback(
+    (section: ExpandableSection, rowId: string) => {
+      setExpandedRowIds((prev) => {
+        const next = new Set(prev[section]);
+        if (next.has(rowId)) next.delete(rowId);
+        else next.add(rowId);
+        return { ...prev, [section]: next };
+      });
+    },
+    [],
+  );
+
+  const collapseAllRows = useCallback((section: ExpandableSection) => {
+    setExpandedRowIds((prev) => ({ ...prev, [section]: new Set<string>() }));
+  }, []);
+
+  /** Open a row without touching the others — used when one is just added. */
+  const expandRow = useCallback((section: ExpandableSection, rowId: string) => {
+    setExpandedRowIds((prev) => ({
+      ...prev,
+      [section]: new Set(prev[section]).add(rowId),
+    }));
+  }, []);
+
+  const forgetRow = useCallback((section: ExpandableSection, rowId: string) => {
+    setExpandedRowIds((prev) => {
+      if (!prev[section].has(rowId)) return prev;
+      const next = new Set(prev[section]);
+      next.delete(rowId);
+      return { ...prev, [section]: next };
+    });
+  }, []);
 
   const markdownRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
 
@@ -95,15 +171,25 @@ export function useResumeForm(locale: string) {
   );
 
   const resetDraft = useCallback(() => {
+    const experience = emptyExperience();
+    const project = emptyProject();
+    const educationEntry = emptyEducation();
+    const skill = emptySkillGroup();
     setBasics(emptyBasics);
     setLinks(defaultLinks);
     setSummary("");
-    setExperiences([emptyExperience()]);
-    setProjects([emptyProject()]);
-    setEducation([emptyEducation()]);
-    setSkills([emptySkillGroup()]);
-    setExpandedExperienceIndex(0);
-    setExpandedProjectIndex(0);
+    setExperiences([experience]);
+    setProjects([project]);
+    setEducation([educationEntry]);
+    setSkills([skill]);
+    setExpandedRowIds(
+      initialExpansion({
+        experience: [experience],
+        project: [project],
+        education: [educationEntry],
+        skill: [skill],
+      }),
+    );
   }, []);
 
   const applyProfileToDraft = useCallback(
@@ -132,8 +218,11 @@ export function useResumeForm(locale: string) {
       );
       setSummary(profile.summary ?? "");
 
+      // Rows are captured before they are set so the initial expansion can be
+      // keyed on the ids that were just minted for them.
+      let experienceRows: ResumeExperience[];
       if (Array.isArray(profile.experiences) && profile.experiences.length > 0) {
-        setExperiences(
+        experienceRows =
           profile.experiences.map((entry) => {
             const source = entry as ResumeExperience & { links?: ResumeLink[] };
             const normalizedLinks =
@@ -153,14 +242,15 @@ export function useResumeForm(locale: string) {
               bullets:
                 Array.isArray(entry.bullets) && entry.bullets.length > 0 ? entry.bullets : [""],
             };
-          }),
-        );
+          });
       } else {
-        setExperiences([emptyExperience()]);
+        experienceRows = [emptyExperience()];
       }
+      setExperiences(experienceRows);
 
+      let projectRows: ResumeProject[];
       if (Array.isArray(profile.projects) && profile.projects.length > 0) {
-        setProjects(
+        projectRows =
           profile.projects.map((entry) => ({
             rowId: newRowId(),
             name: entry.name ?? "",
@@ -185,29 +275,30 @@ export function useResumeForm(locale: string) {
                     : [{ label: "", url: "" }]) as ResumeLink[]),
             bullets:
               Array.isArray(entry.bullets) && entry.bullets.length > 0 ? entry.bullets : [""],
-          })),
-        );
+          }));
       } else {
-        setProjects([emptyProject()]);
+        projectRows = [emptyProject()];
       }
+      setProjects(projectRows);
 
+      let educationRows: ResumeEducation[];
       if (Array.isArray(profile.education) && profile.education.length > 0) {
-        setEducation(
-          profile.education.map((entry) => ({
-            rowId: newRowId(),
-            school: entry.school ?? "",
-            degree: entry.degree ?? "",
-            location: entry.location ?? "",
-            dates: entry.dates ?? "",
-            details: entry.details ?? "",
-          })),
-        );
+        educationRows = profile.education.map((entry) => ({
+          rowId: newRowId(),
+          school: entry.school ?? "",
+          degree: entry.degree ?? "",
+          location: entry.location ?? "",
+          dates: entry.dates ?? "",
+          details: entry.details ?? "",
+        }));
       } else {
-        setEducation([emptyEducation()]);
+        educationRows = [emptyEducation()];
       }
+      setEducation(educationRows);
 
+      let skillRows: ResumeSkillGroup[];
       if (Array.isArray(profile.skills) && profile.skills.length > 0) {
-        const skillGroups = profile.skills.map((group) => {
+        skillRows = profile.skills.map((group) => {
           const source = group as { category?: string; label?: string; items?: string[] };
           return {
             rowId: newRowId(),
@@ -218,13 +309,19 @@ export function useResumeForm(locale: string) {
                 : "",
           };
         });
-        setSkills(skillGroups);
       } else {
-        setSkills([emptySkillGroup()]);
+        skillRows = [emptySkillGroup()];
       }
+      setSkills(skillRows);
 
-      setExpandedExperienceIndex(0);
-      setExpandedProjectIndex(0);
+      setExpandedRowIds(
+        initialExpansion({
+          experience: experienceRows,
+          project: projectRows,
+          education: educationRows,
+          skill: skillRows,
+        }),
+      );
     },
     [resetDraft],
   );
@@ -259,25 +356,22 @@ export function useResumeForm(locale: string) {
   );
 
   const addExperience = useCallback(() => {
-    setExperiences((prev) => {
-      const next = [...prev, emptyExperience()];
-      setExpandedExperienceIndex(next.length - 1);
-      return next;
-    });
-  }, []);
+    const row = emptyExperience();
+    setExperiences((prev) => [...prev, row]);
+    expandRow("experience", row.rowId);
+  }, [expandRow]);
 
-  const removeExperience = useCallback((index: number) => {
-    setExperiences((prev) => {
-      if (prev.length <= 1) return prev;
-      const next = prev.filter((_, idx) => idx !== index);
-      setExpandedExperienceIndex((current) => {
-        if (current === index) return Math.max(0, index - 1);
-        if (current > index) return current - 1;
-        return current;
+  const removeExperience = useCallback(
+    (index: number) => {
+      setExperiences((prev) => {
+        if (prev.length <= 1) return prev;
+        const removed = prev[index];
+        if (removed) forgetRow("experience", removed.rowId);
+        return prev.filter((_, idx) => idx !== index);
       });
-      return next;
-    });
-  }, []);
+    },
+    [forgetRow],
+  );
 
   const updateExperienceBullet = useCallback(
     (expIndex: number, bulletIndex: number, value: string) => {
@@ -358,25 +452,22 @@ export function useResumeForm(locale: string) {
   );
 
   const addProject = useCallback(() => {
-    setProjects((prev) => {
-      const next = [...prev, emptyProject()];
-      setExpandedProjectIndex(next.length - 1);
-      return next;
-    });
-  }, []);
+    const row = emptyProject();
+    setProjects((prev) => [...prev, row]);
+    expandRow("project", row.rowId);
+  }, [expandRow]);
 
-  const removeProject = useCallback((index: number) => {
-    setProjects((prev) => {
-      if (prev.length <= 1) return prev;
-      const next = prev.filter((_, idx) => idx !== index);
-      setExpandedProjectIndex((current) => {
-        if (current === index) return Math.max(0, index - 1);
-        if (current > index) return current - 1;
-        return current;
+  const removeProject = useCallback(
+    (index: number) => {
+      setProjects((prev) => {
+        if (prev.length <= 1) return prev;
+        const removed = prev[index];
+        if (removed) forgetRow("project", removed.rowId);
+        return prev.filter((_, idx) => idx !== index);
       });
-      return next;
-    });
-  }, []);
+    },
+    [forgetRow],
+  );
 
   const updateProjectBullet = useCallback(
     (projIndex: number, bulletIndex: number, value: string) => {
@@ -457,12 +548,22 @@ export function useResumeForm(locale: string) {
   );
 
   const addEducation = useCallback(() => {
-    setEducation((prev) => [...prev, emptyEducation()]);
-  }, []);
+    const row = emptyEducation();
+    setEducation((prev) => [...prev, row]);
+    expandRow("education", row.rowId);
+  }, [expandRow]);
 
-  const removeEducation = useCallback((index: number) => {
-    setEducation((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== index) : prev));
-  }, []);
+  const removeEducation = useCallback(
+    (index: number) => {
+      setEducation((prev) => {
+        if (prev.length <= 1) return prev;
+        const removed = prev[index];
+        if (removed) forgetRow("education", removed.rowId);
+        return prev.filter((_, idx) => idx !== index);
+      });
+    },
+    [forgetRow],
+  );
 
   // --- skills ---
   const updateSkillGroup = useCallback(
@@ -475,12 +576,22 @@ export function useResumeForm(locale: string) {
   );
 
   const addSkillGroup = useCallback(() => {
-    setSkills((prev) => [...prev, emptySkillGroup()]);
-  }, []);
+    const row = emptySkillGroup();
+    setSkills((prev) => [...prev, row]);
+    expandRow("skill", row.rowId);
+  }, [expandRow]);
 
-  const removeSkillGroup = useCallback((index: number) => {
-    setSkills((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== index) : prev));
-  }, []);
+  const removeSkillGroup = useCallback(
+    (index: number) => {
+      setSkills((prev) => {
+        if (prev.length <= 1) return prev;
+        const removed = prev[index];
+        if (removed) forgetRow("skill", removed.rowId);
+        return prev.filter((_, idx) => idx !== index);
+      });
+    },
+    [forgetRow],
+  );
 
   // --- reorder ---
   const moveSectionItem = useCallback(
@@ -491,7 +602,8 @@ export function useResumeForm(locale: string) {
           if (from >= prev.length || to >= prev.length) return prev;
           return arrayMove(prev, from, to);
         });
-        setExpandedExperienceIndex((current) => remapFocusedIndex(current, from, to));
+        // No expansion bookkeeping: rows are tracked by rowId, which a
+        // reorder does not change.
         return;
       }
       if (section === "project") {
@@ -499,7 +611,6 @@ export function useResumeForm(locale: string) {
           if (from >= prev.length || to >= prev.length) return prev;
           return arrayMove(prev, from, to);
         });
-        setExpandedProjectIndex((current) => remapFocusedIndex(current, from, to));
         return;
       }
       if (section === "education") {
@@ -771,10 +882,9 @@ export function useResumeForm(locale: string) {
     projects,
     education,
     skills,
-    expandedExperienceIndex,
-    setExpandedExperienceIndex,
-    expandedProjectIndex,
-    setExpandedProjectIndex,
+    expandedRowIds,
+    toggleRowExpanded,
+    collapseAllRows,
     // basics / links
     updateBasics,
     updateLink,

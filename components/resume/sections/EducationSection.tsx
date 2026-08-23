@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { GraduationCap } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -9,6 +8,7 @@ import { EntryCard } from "../EntryCard";
 import { GhostAddRow } from "../GhostAddRow";
 import { ReorderableList } from "../ReorderableList";
 import { SectionShell } from "../SectionShell";
+import { CollapseAllButton } from "../CollapseAllButton";
 import { summaryLine } from "../entrySummary";
 import type { ResumeEducation } from "../types";
 
@@ -18,6 +18,9 @@ interface EducationSectionProps {
   addEducation: () => void;
   removeEducation: (index: number) => void;
   onMove: (from: number, to: number) => void;
+  expandedIds: ReadonlySet<string>;
+  onToggleExpanded: (rowId: string) => void;
+  onCollapseAll: () => void;
 }
 
 export function EducationSection({
@@ -26,11 +29,13 @@ export function EducationSection({
   addEducation,
   removeEducation,
   onMove,
+  expandedIds,
+  onToggleExpanded,
+  onCollapseAll,
 }: EducationSectionProps) {
   const t = useTranslations("resumeForm");
   // Only one entry is open at a time: an accordion keeps the list scannable
   // and the live preview's relationship to "the thing I am editing" obvious.
-  const [expandedIndex, setExpandedIndex] = useState(0);
 
   return (
     <SectionShell
@@ -38,6 +43,12 @@ export function EducationSection({
       icon={GraduationCap}
       title={t("education")}
       description={t("educationDesc")}
+      headerAction={
+        <CollapseAllButton
+          open={expandedIds.size}
+          onCollapseAll={onCollapseAll}
+        />
+      }
     >
       <div className="space-y-2">
         <ReorderableList
@@ -49,8 +60,8 @@ export function EducationSection({
               title={entry.school || entry.degree}
               subtitle={summaryLine([entry.degree || null, entry.dates])}
               untitledLabel={t("untitledEducation")}
-              expanded={expandedIndex === index}
-              onToggle={() => setExpandedIndex(expandedIndex === index ? -1 : index)}
+              expanded={expandedIds.has(entry.rowId)}
+              onToggle={() => onToggleExpanded(entry.rowId)}
               onRemove={education.length > 1 ? () => removeEducation(index) : undefined}
               removeLabel={t("remove")}
               dragHandleProps={dragHandleProps}
@@ -114,7 +125,6 @@ export function EducationSection({
           label={t("addEducation")}
           onClick={() => {
             addEducation();
-            setExpandedIndex(education.length);
           }}
         />
       </div>

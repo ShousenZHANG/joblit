@@ -12,6 +12,13 @@ interface SectionShellProps {
   icon: ElementType;
   title: string;
   description?: string;
+  /**
+   * Optional control rendered beside the heading — a sibling of the collapse
+   * toggle, never inside it, because a button inside a button is invalid and
+   * swallows the inner click. Used by the repeatable sections for "collapse
+   * all entries".
+   */
+  headerAction?: ReactNode;
   children: ReactNode;
 }
 
@@ -37,6 +44,7 @@ export function SectionShell({
   icon: Icon,
   title,
   description,
+  headerAction,
   children,
 }: SectionShellProps) {
   const {
@@ -66,13 +74,13 @@ export function SectionShell({
       className="scroll-mt-4"
       aria-labelledby={`resume-section-${id}-heading`}
     >
-      <div className="sticky top-0 z-10 -mx-1 bg-background/92 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <div className="sticky top-0 z-10 -mx-1 flex items-center gap-1 bg-background/92 px-1 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <button
           type="button"
           onClick={() => toggleSectionCollapsed(id)}
           aria-expanded={!collapsed}
           aria-controls={`resume-section-${id}-body`}
-          className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-1.5 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
         >
           <span
             className={cn(
@@ -102,6 +110,7 @@ export function SectionShell({
             )}
           />
         </button>
+        {headerAction}
       </div>
 
       {/* Collapse animates height + opacity instead of blinking in and out.

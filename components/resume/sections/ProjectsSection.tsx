@@ -8,6 +8,7 @@ import { EntryCard } from "../EntryCard";
 import { GhostAddRow } from "../GhostAddRow";
 import { ReorderableList } from "../ReorderableList";
 import { SectionShell } from "../SectionShell";
+import { CollapseAllButton } from "../CollapseAllButton";
 import { BulletList } from "../BulletList";
 import { EntryLinkRows } from "../EntryLinkRows";
 import { summaryLine } from "../entrySummary";
@@ -16,8 +17,9 @@ import type { ResumeLink, ResumeProject } from "../types";
 interface ProjectsSectionProps {
   projects: ResumeProject[];
   locale: string;
-  expandedIndex: number;
-  setExpandedIndex: (index: number) => void;
+  expandedIds: ReadonlySet<string>;
+  onToggleExpanded: (rowId: string) => void;
+  onCollapseAll: () => void;
   updateProject: (index: number, field: keyof ResumeProject, value: string) => void;
   addProject: () => void;
   removeProject: (index: number) => void;
@@ -46,8 +48,9 @@ interface ProjectsSectionProps {
 export function ProjectsSection({
   projects,
   locale,
-  expandedIndex,
-  setExpandedIndex,
+  expandedIds,
+  onToggleExpanded,
+  onCollapseAll,
   updateProject,
   addProject,
   removeProject,
@@ -69,6 +72,12 @@ export function ProjectsSection({
       icon={FolderKanban}
       title={t("projects")}
       description={t("projectsDesc")}
+      headerAction={
+        <CollapseAllButton
+          open={expandedIds.size}
+          onCollapseAll={onCollapseAll}
+        />
+      }
     >
       <div className="space-y-2">
         <ReorderableList
@@ -80,8 +89,8 @@ export function ProjectsSection({
               title={entry.name}
               subtitle={summaryLine([entry.stack, entry.dates])}
               untitledLabel={t("untitledProject")}
-              expanded={expandedIndex === index}
-              onToggle={() => setExpandedIndex(expandedIndex === index ? -1 : index)}
+              expanded={expandedIds.has(entry.rowId)}
+              onToggle={() => onToggleExpanded(entry.rowId)}
               onRemove={projects.length > 1 ? () => removeProject(index) : undefined}
               removeLabel={t("remove")}
               dragHandleProps={dragHandleProps}
@@ -165,7 +174,6 @@ export function ProjectsSection({
           label={t("addProject")}
           onClick={() => {
             addProject();
-            setExpandedIndex(projects.length);
           }}
         />
       </div>

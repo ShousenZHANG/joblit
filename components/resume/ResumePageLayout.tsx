@@ -54,8 +54,9 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
     applyBoldMarkdown,
     registerMarkdownRef,
     experiences,
-    expandedExperienceIndex,
-    setExpandedExperienceIndex,
+    expandedRowIds,
+    toggleRowExpanded,
+    collapseAllRows,
     updateExperience,
     addExperience,
     removeExperience,
@@ -67,8 +68,6 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
     removeExperienceLink,
     moveSectionItem,
     projects,
-    expandedProjectIndex,
-    setExpandedProjectIndex,
     updateProject,
     addProject,
     removeProject,
@@ -116,8 +115,9 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
         <ExperienceSection
           experiences={experiences}
           locale={locale}
-          expandedIndex={expandedExperienceIndex}
-          setExpandedIndex={setExpandedExperienceIndex}
+          expandedIds={expandedRowIds.experience}
+          onToggleExpanded={(rowId) => toggleRowExpanded("experience", rowId)}
+          onCollapseAll={() => collapseAllRows("experience")}
           updateExperience={updateExperience}
           addExperience={addExperience}
           removeExperience={removeExperience}
@@ -137,8 +137,9 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
         <ProjectsSection
           projects={projects}
           locale={locale}
-          expandedIndex={expandedProjectIndex}
-          setExpandedIndex={setExpandedProjectIndex}
+          expandedIds={expandedRowIds.project}
+          onToggleExpanded={(rowId) => toggleRowExpanded("project", rowId)}
+          onCollapseAll={() => collapseAllRows("project")}
           updateProject={updateProject}
           addProject={addProject}
           removeProject={removeProject}
@@ -157,6 +158,9 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
       return (
         <EducationSection
           education={education}
+          expandedIds={expandedRowIds.education}
+          onToggleExpanded={(rowId) => toggleRowExpanded("education", rowId)}
+          onCollapseAll={() => collapseAllRows("education")}
           updateEducation={updateEducation}
           addEducation={addEducation}
           removeEducation={removeEducation}
@@ -167,6 +171,9 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
       return (
         <SkillsSection
           skills={skills}
+          expandedIds={expandedRowIds.skill}
+          onToggleExpanded={(rowId) => toggleRowExpanded("skill", rowId)}
+          onCollapseAll={() => collapseAllRows("skill")}
           updateSkillGroup={updateSkillGroup}
           addSkillGroup={addSkillGroup}
           removeSkillGroup={removeSkillGroup}

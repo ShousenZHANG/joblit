@@ -8,6 +8,7 @@ import { EntryCard } from "../EntryCard";
 import { GhostAddRow } from "../GhostAddRow";
 import { ReorderableList } from "../ReorderableList";
 import { SectionShell } from "../SectionShell";
+import { CollapseAllButton } from "../CollapseAllButton";
 import { BulletList } from "../BulletList";
 import { EntryLinkRows } from "../EntryLinkRows";
 import { summaryLine } from "../entrySummary";
@@ -16,8 +17,9 @@ import type { ResumeExperience, ResumeLink } from "../types";
 interface ExperienceSectionProps {
   experiences: ResumeExperience[];
   locale: string;
-  expandedIndex: number;
-  setExpandedIndex: (index: number) => void;
+  expandedIds: ReadonlySet<string>;
+  onToggleExpanded: (rowId: string) => void;
+  onCollapseAll: () => void;
   updateExperience: (index: number, field: keyof ResumeExperience, value: string) => void;
   addExperience: () => void;
   removeExperience: (index: number) => void;
@@ -46,8 +48,9 @@ interface ExperienceSectionProps {
 export function ExperienceSection({
   experiences,
   locale,
-  expandedIndex,
-  setExpandedIndex,
+  expandedIds,
+  onToggleExpanded,
+  onCollapseAll,
   updateExperience,
   addExperience,
   removeExperience,
@@ -69,6 +72,12 @@ export function ExperienceSection({
       icon={Briefcase}
       title={t("experience")}
       description={t("experienceDesc")}
+      headerAction={
+        <CollapseAllButton
+          open={expandedIds.size}
+          onCollapseAll={onCollapseAll}
+        />
+      }
     >
       <div className="space-y-2">
         <ReorderableList
@@ -80,8 +89,8 @@ export function ExperienceSection({
               title={entry.title}
               subtitle={summaryLine([entry.company, entry.dates])}
               untitledLabel={t("untitledExperience")}
-              expanded={expandedIndex === index}
-              onToggle={() => setExpandedIndex(expandedIndex === index ? -1 : index)}
+              expanded={expandedIds.has(entry.rowId)}
+              onToggle={() => onToggleExpanded(entry.rowId)}
               onRemove={
                 experiences.length > 1 ? () => removeExperience(index) : undefined
               }
@@ -175,7 +184,6 @@ export function ExperienceSection({
           label={t("addExperience")}
           onClick={() => {
             addExperience();
-            setExpandedIndex(experiences.length);
           }}
         />
       </div>

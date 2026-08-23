@@ -63,6 +63,8 @@ type ResumeContextValue = UseResumeFormReturn &
     /** True when the live draft differs from the last persisted snapshot. */
     isDirty: boolean;
     autosaveStatus: AutosaveStatus;
+    /** Epoch ms of the last successful save; null before the first one. */
+    autosaveLastSavedAt: number | null;
     /** Force a save now; resolves false when it failed (caller must not discard). */
     autosaveFlush: () => Promise<boolean>;
     autosaveRetry: () => void;
@@ -413,6 +415,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
         saving,
         isDirty,
         autosaveStatus: autosave.status,
+        autosaveLastSavedAt: autosave.lastSavedAt,
         autosaveFlush: autosave.flush,
         autosaveRetry,
         locale,

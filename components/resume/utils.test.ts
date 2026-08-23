@@ -4,7 +4,6 @@ import {
   hasBullets,
   normalizeBullets,
   normalizeCommaItems,
-  remapFocusedIndex,
 } from "./utils";
 
 describe("hasContent", () => {
@@ -119,47 +118,3 @@ describe("normalizeCommaItems", () => {
   });
 });
 
-describe("remapFocusedIndex", () => {
-  it("returns destination when focused item is moved", () => {
-    expect(remapFocusedIndex(2, 2, 5)).toBe(5);
-  });
-
-  it("shifts down when item moves forward past focused", () => {
-    // from=0 to=3: items between (1,2,3) shift down by 1
-    expect(remapFocusedIndex(2, 0, 3)).toBe(1);
-  });
-
-  it("shifts up when item moves backward before focused", () => {
-    // from=4 to=1: items between (1,2,3,4) shift up by 1
-    expect(remapFocusedIndex(2, 4, 1)).toBe(3);
-  });
-
-  it("returns same index when move does not affect focused item", () => {
-    // from=3 to=5: focused at 1 is unaffected
-    expect(remapFocusedIndex(1, 3, 5)).toBe(1);
-  });
-
-  it("returns same index when from equals to (no-op move)", () => {
-    expect(remapFocusedIndex(2, 2, 2)).toBe(2);
-  });
-
-  it("focused item at boundary: forward move, focused at to boundary", () => {
-    // from=0 to=3, focused at 3: focused is at `to`, so shifts down to 2
-    expect(remapFocusedIndex(3, 0, 3)).toBe(2);
-  });
-
-  it("focused item at boundary: backward move, focused at to boundary", () => {
-    // from=4 to=1, focused at 1: focused is at `to`, so shifts up to 2
-    expect(remapFocusedIndex(1, 4, 1)).toBe(2);
-  });
-
-  it("does not affect focused item above range of forward move", () => {
-    // from=1 to=3, focused at 0: unaffected
-    expect(remapFocusedIndex(0, 1, 3)).toBe(0);
-  });
-
-  it("does not affect focused item below range of backward move", () => {
-    // from=3 to=1, focused at 0: unaffected
-    expect(remapFocusedIndex(0, 3, 1)).toBe(0);
-  });
-});

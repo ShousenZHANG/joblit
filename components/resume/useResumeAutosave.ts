@@ -42,6 +42,13 @@ interface UseResumeAutosaveOptions {
 
 export interface UseResumeAutosaveReturn {
   status: AutosaveStatus;
+  /**
+   * Epoch ms of the last successful save, or null if nothing has been
+   * persisted this session. The indicator turns this into "just now" / "3m
+   * ago": a bare "Saved" that never changes reads as decoration and stops
+   * being looked at, which is exactly how this indicator went unnoticed.
+   */
+  lastSavedAt: number | null;
   /** True while an edit is waiting out the debounce or a save is in flight. */
   pending: boolean;
   /**
@@ -62,6 +69,7 @@ export function useResumeAutosave({
   delayMs = DEFAULT_DELAY_MS,
 }: UseResumeAutosaveOptions): UseResumeAutosaveReturn {
   const [status, setStatus] = useState<AutosaveStatus>("idle");
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   // Latest values, read by timers and unload handlers that outlive the render
   // which created them. Synced in an effect rather than during render: a
@@ -100,7 +108,10 @@ export function useResumeAutosave({
     const attempt = (async () => {
       try {
         await saveRef.current();
-        if (mountedRef.current) setStatus("saved");
+        if (mountedRef.current) {
+          setStatus("saved");
+          setLastSavedAt(Date.now());
+        }
         return true;
       } catch {
         // Keep the draft. The next edit — or the retry affordance — saves the
@@ -164,5 +175,10 @@ export function useResumeAutosave({
     };
   }, [flush]);
 
-  return { status, pending: isDirty || status === "saving", flush };
+  return {
+    status,
+    lastSavedAt,
+    pending: isDirty || status === "saving",
+    flush,
+  };
 }

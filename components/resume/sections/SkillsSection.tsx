@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Wrench } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -9,6 +8,7 @@ import { EntryCard } from "../EntryCard";
 import { GhostAddRow } from "../GhostAddRow";
 import { ReorderableList } from "../ReorderableList";
 import { SectionShell } from "../SectionShell";
+import { CollapseAllButton } from "../CollapseAllButton";
 import type { ResumeSkillGroup } from "../types";
 
 interface SkillsSectionProps {
@@ -17,6 +17,9 @@ interface SkillsSectionProps {
   addSkillGroup: () => void;
   removeSkillGroup: (index: number) => void;
   onMove: (from: number, to: number) => void;
+  expandedIds: ReadonlySet<string>;
+  onToggleExpanded: (rowId: string) => void;
+  onCollapseAll: () => void;
 }
 
 export function SkillsSection({
@@ -25,9 +28,11 @@ export function SkillsSection({
   addSkillGroup,
   removeSkillGroup,
   onMove,
+  expandedIds,
+  onToggleExpanded,
+  onCollapseAll,
 }: SkillsSectionProps) {
   const t = useTranslations("resumeForm");
-  const [expandedIndex, setExpandedIndex] = useState(0);
 
   return (
     <SectionShell
@@ -35,6 +40,12 @@ export function SkillsSection({
       icon={Wrench}
       title={t("skills")}
       description={t("skillsDesc")}
+      headerAction={
+        <CollapseAllButton
+          open={expandedIds.size}
+          onCollapseAll={onCollapseAll}
+        />
+      }
     >
       <div className="space-y-2">
         <ReorderableList
@@ -46,8 +57,8 @@ export function SkillsSection({
               title={group.category}
               subtitle={group.itemsText}
               untitledLabel={t("untitledSkillGroup")}
-              expanded={expandedIndex === index}
-              onToggle={() => setExpandedIndex(expandedIndex === index ? -1 : index)}
+              expanded={expandedIds.has(group.rowId)}
+              onToggle={() => onToggleExpanded(group.rowId)}
               onRemove={skills.length > 1 ? () => removeSkillGroup(index) : undefined}
               removeLabel={t("remove")}
               dragHandleProps={dragHandleProps}
@@ -79,7 +90,6 @@ export function SkillsSection({
           label={t("addGroup")}
           onClick={() => {
             addSkillGroup();
-            setExpandedIndex(skills.length);
           }}
         />
       </div>
