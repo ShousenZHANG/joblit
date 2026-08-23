@@ -38,6 +38,17 @@ interface EntryCardProps {
   dragHandleProps: HTMLAttributes<HTMLButtonElement>;
   dragHandleLabel: string;
   isDragging?: boolean;
+  /**
+   * Alt+Up / Alt+Down move this entry. Omitted at the ends of the list, which
+   * is also what disables the corresponding shortcut.
+   *
+   * dnd-kit already makes the drag handle keyboard-operable, but that path
+   * costs a tab to the handle, a space to pick up, arrows, and a space to
+   * drop. For the common case — nudging one role above another while writing
+   * it — the shortcut works from inside whatever field has focus.
+   */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   children: ReactNode;
 }
 
@@ -52,6 +63,8 @@ export function EntryCard({
   dragHandleProps,
   dragHandleLabel,
   isDragging,
+  onMoveUp,
+  onMoveDown,
   children,
 }: EntryCardProps) {
   const t = useTranslations("resumeForm");
@@ -61,6 +74,20 @@ export function EntryCard({
   return (
     <div
       data-expanded={expanded ? "true" : "false"}
+      onKeyDown={(event) => {
+        if (!event.altKey || event.metaKey || event.ctrlKey) return;
+        const move =
+          event.key === "ArrowUp"
+            ? onMoveUp
+            : event.key === "ArrowDown"
+              ? onMoveDown
+              : undefined;
+        if (!move) return;
+        // Alt+Arrow is caret movement in a textarea on some platforms, so
+        // claim it before the field acts on it.
+        event.preventDefault();
+        move();
+      }}
       className={cn(
         "group/entry rounded-xl border border-border bg-card transition-[box-shadow,border-color] duration-150 motion-reduce:transition-none",
         "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1 motion-safe:duration-150",

@@ -4,6 +4,7 @@ import {
   isPlausibleEmail,
   isPlausibleUrl,
   suggestLinkLabel,
+  extractUrls,
 } from "./linkBrand";
 
 describe("link brand detection", () => {
@@ -45,5 +46,30 @@ describe("quiet field validation", () => {
     expect(isPlausibleEmail("eddy@example.com")).toBe(true);
     expect(isPlausibleEmail("eddy@")).toBe(false);
     expect(isPlausibleEmail("eddy example.com")).toBe(false);
+  });
+});
+
+describe("extractUrls", () => {
+  it("takes every address out of a pasted block, in order", () => {
+    expect(
+      extractUrls("github.com/me\nhttps://example.com/cv  linkedin.com/in/me"),
+    ).toEqual(["github.com/me", "https://example.com/cv", "linkedin.com/in/me"]);
+  });
+
+  it("ignores prose and anything without a host", () => {
+    expect(extractUrls("see my work at")).toEqual([]);
+    expect(extractUrls("call me on 0400 000 000")).toEqual([]);
+    expect(extractUrls("")).toEqual([]);
+  });
+
+  it("drops the punctuation a URL picks up from a sentence", () => {
+    expect(extractUrls("my repo (github.com/me), and my site example.com.")).toEqual([
+      "github.com/me",
+      "example.com",
+    ]);
+  });
+
+  it("collapses duplicates so one link cannot eat two of the few slots", () => {
+    expect(extractUrls("github.com/me github.com/ME")).toEqual(["github.com/me"]);
   });
 });

@@ -64,6 +64,10 @@ export function SkillsSection({
               dragHandleProps={dragHandleProps}
               dragHandleLabel={t("dragToReorder")}
               isDragging={isDragging}
+              onMoveUp={index > 0 ? () => onMove(index, index - 1) : undefined}
+              onMoveDown={
+                index < skills.length - 1 ? () => onMove(index, index + 1) : undefined
+              }
             >
               <div className="space-y-1.5">
                 <Label htmlFor={`skill-label-${index}`}>{t("category")}</Label>

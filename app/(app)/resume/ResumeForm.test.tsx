@@ -346,6 +346,62 @@ describe("Resume page", () => {
     ).toBe(false);
   });
 
+  /**
+   * Keyboard handling in the bullet list. Reaching for the mouse to start the
+   * next bullet is the most repeated interaction in the form, so these are the
+   * shortcuts every list editor has already trained people to expect.
+   */
+  describe("bullet keyboard", () => {
+    const bulletFields = () => screen.getAllByLabelText(/^Experience bullets \d+$/);
+
+    it("starts the next bullet on Enter and keeps Shift+Enter for line breaks", async () => {
+      mockEmptyProfileFetch();
+      renderResumePage();
+      await screen.findByRole("heading", { name: "Professional experience" });
+
+      const first = bulletFields()[0];
+      fireEvent.change(first, { target: { value: "Shipped the thing" } });
+      fireEvent.keyDown(first, { key: "Enter" });
+
+      await waitFor(() => expect(bulletFields()).toHaveLength(2));
+      // The new row takes focus, so typing continues without a click.
+      expect(document.activeElement).toBe(bulletFields()[1]);
+
+      // Shift+Enter is a line break inside the current bullet, not a new one.
+      fireEvent.keyDown(bulletFields()[1], { key: "Enter", shiftKey: true });
+      expect(bulletFields()).toHaveLength(2);
+    });
+
+    it("removes an empty bullet on Backspace and lands in the one above", async () => {
+      mockEmptyProfileFetch();
+      renderResumePage();
+      await screen.findByRole("heading", { name: "Professional experience" });
+
+      fireEvent.change(bulletFields()[0], { target: { value: "Kept" } });
+      fireEvent.keyDown(bulletFields()[0], { key: "Enter" });
+      await waitFor(() => expect(bulletFields()).toHaveLength(2));
+
+      // The second bullet is still empty — Backspace should retire it.
+      fireEvent.keyDown(bulletFields()[1], { key: "Backspace" });
+
+      await waitFor(() => expect(bulletFields()).toHaveLength(1));
+      expect(bulletFields()[0]).toHaveValue("Kept");
+      expect(document.activeElement).toBe(bulletFields()[0]);
+    });
+
+    it("leaves a bullet with text alone on Backspace", async () => {
+      mockEmptyProfileFetch();
+      renderResumePage();
+      await screen.findByRole("heading", { name: "Professional experience" });
+
+      fireEvent.change(bulletFields()[0], { target: { value: "Still writing" } });
+      fireEvent.keyDown(bulletFields()[0], { key: "Backspace" });
+
+      expect(bulletFields()).toHaveLength(1);
+      expect(bulletFields()[0]).toHaveValue("Still writing");
+    });
+  });
+
   it("adds experience bullets on the production experience section", async () => {
     mockEmptyProfileFetch();
 

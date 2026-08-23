@@ -96,3 +96,33 @@ export function isPlausibleEmail(value: string): boolean {
   if (!trimmed) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmed);
 }
+
+/**
+ * Pull every plausible URL out of pasted text, in the order they appear.
+ *
+ * Pasting into the links region is meant to survive whatever the user copied:
+ * a bare host, a full URL, a whole line from a document, or several at once
+ * separated by newlines, commas or spaces. Anything that does not look like a
+ * web address is dropped rather than becoming an empty row, and duplicates
+ * collapse so pasting the same link twice does not consume two of the very few
+ * slots an entry has.
+ */
+export function extractUrls(text: string): string[] {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  for (const token of text.split(/[\s,;]+/)) {
+    // A URL copied out of a sentence arrives wearing its punctuation —
+    // "(github.com/me)," — so strip both ends before judging it.
+    const candidate = token.trim().replace(/^[([<"'‘“]+/, "").replace(/[)\]>"'’”.,;:]+$/, "");
+    if (!candidate) continue;
+    // isPlausibleUrl treats empty as valid — it is a "do not nag" check for a
+    // field being typed into, not a matcher — so require a host explicitly.
+    if (!hostOf(candidate)) continue;
+    if (!isPlausibleUrl(candidate)) continue;
+    const key = candidate.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    urls.push(candidate);
+  }
+  return urls;
+}

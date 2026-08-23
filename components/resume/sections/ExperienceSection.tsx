@@ -98,6 +98,10 @@ export function ExperienceSection({
               dragHandleProps={dragHandleProps}
               dragHandleLabel={t("dragToReorder")}
               isDragging={isDragging}
+              onMoveUp={index > 0 ? () => onMove(index, index - 1) : undefined}
+              onMoveDown={
+                index < experiences.length - 1 ? () => onMove(index, index + 1) : undefined
+              }
             >
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1.5">
