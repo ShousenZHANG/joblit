@@ -4,6 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ResumeProfileSchema } from "@/lib/shared/schemas/resumeProfile";
 import type { PreviewStatus, ResumeProfilePayload } from "./types";
 
+/**
+ * Floor on the gap between two compiles.
+ *
+ * The editor refreshes as the user types, and a LaTeX compile is the most
+ * expensive request the app makes. The debounce alone only measures the pause
+ * before a compile; this measures the gap between compiles, so a burst of
+ * short pauses in a long editing run still costs one render every few seconds
+ * rather than one per pause.
+ */
+const PREVIEW_MIN_INTERVAL_MS = 4000;
+
 interface UseResumePreviewParams {
   buildPayload: (mode: "preview" | "save") => ResumeProfilePayload;
   hasAnyContent: boolean;
@@ -41,6 +52,16 @@ export function useResumePreview({
     pdfUrlRef.current = pdfUrl;
   }, [pdfUrl]);
 
+  /** When the last compile was dispatched, for the minimum-interval floor. */
+  const lastRunAtRef = useRef(0);
+  /**
+   * Set when the server rate-limits us. The editor then stops compiling on its
+   * own and waits for the next explicit refresh: the preview is already marked
+   * stale by the caller's badge, and an error banner for a limit the user
+   * cannot see or act on is noise, not information.
+   */
+  const rateLimitedUntilRef = useRef(0);
+
   // cleanup timer and abort on unmount
   useEffect(() => {
     return () => {
@@ -64,7 +85,19 @@ export function useResumePreview({
     (
       delayMs = 800,
       showEmptyToast = false,
-      options?: { payload?: ResumeProfilePayload; payloadKey?: string; force?: boolean },
+      options?: {
+        payload?: ResumeProfilePayload;
+        payloadKey?: string;
+        force?: boolean;
+        /**
+         * Subject to the minimum-interval floor. Set by the typing refresh
+         * only: an explicit commit — leaving a field, changing section, or
+         * pressing Refresh — is the user saying "now", and making that wait
+         * out a cooldown would be the very unresponsiveness this is meant to
+         * avoid.
+         */
+        throttled?: boolean;
+      },
     ) => {
       if (!hasAnyContent) {
         if (showEmptyToast) {
@@ -98,10 +131,21 @@ export function useResumePreview({
           payloadKey === previewLatestKeyRef.current);
       if (shouldSkip) return;
 
+      // Sit out a server-imposed cooldown rather than hammering it. A forced
+      // refresh is the user asking explicitly, so it always goes through.
+      if (!options?.force && Date.now() < rateLimitedUntilRef.current) return;
+
       if (previewTimerRef.current) {
         clearTimeout(previewTimerRef.current);
       }
       previewAbortRef.current?.abort();
+
+      // Hold a compile back to the minimum interval instead of dropping it, so
+      // the last thing typed still reaches the preview — just later.
+      const sinceLastRun = Date.now() - lastRunAtRef.current;
+      const effectiveDelay = options?.throttled
+        ? Math.max(delayMs, PREVIEW_MIN_INTERVAL_MS - sinceLastRun)
+        : delayMs;
 
       // Always announce the compile. The old code reported "ready" for
       // background refreshes because keystroke-driven compiles would strobe
@@ -117,6 +161,7 @@ export function useResumePreview({
       const runPreview = async (attempt: number) => {
         previewScheduledKeyRef.current = null;
         previewInFlightKeyRef.current = payloadKey;
+        lastRunAtRef.current = Date.now();
         const controller = new AbortController();
         previewAbortRef.current = controller;
         try {
@@ -128,6 +173,21 @@ export function useResumePreview({
           });
 
           if (!res.ok) {
+            // Rate limiting is not a failure the user can act on: they cannot
+            // see the budget, and the draft is already flagged as unpreviewed.
+            // Back off quietly, keep the last good PDF painted, and let the
+            // next commit or an explicit refresh try again.
+            if (res.status === 429) {
+              const retryAfter = Number(res.headers.get("retry-after"));
+              rateLimitedUntilRef.current =
+                Date.now() +
+                (Number.isFinite(retryAfter) && retryAfter > 0
+                  ? retryAfter * 1000
+                  : PREVIEW_MIN_INTERVAL_MS * 2);
+              setPreviewStatus(pdfUrlRef.current ? "ready" : "idle");
+              return;
+            }
+
             let message = t("previewFailed");
             let code: string | undefined;
             if (res.headers.get("content-type")?.includes("application/json")) {
@@ -167,6 +227,7 @@ export function useResumePreview({
             return url;
           });
           setPreviewStatus("ready");
+          rateLimitedUntilRef.current = 0;
           previewLatestKeyRef.current = payloadKey;
           setPreviewedKey(payloadKey);
         } catch (err) {
@@ -185,7 +246,7 @@ export function useResumePreview({
 
       previewTimerRef.current = setTimeout(() => {
         runPreview(0);
-      }, delayMs);
+      }, effectiveDelay);
     },
     [buildPayload, hasAnyContent, toast, t],
   );

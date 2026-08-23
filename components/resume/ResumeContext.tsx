@@ -38,6 +38,12 @@ export type SectionCompletion = Record<SectionId, boolean>;
  * finishing the field.
  */
 const PREVIEW_COMMIT_DELAY_MS = 120;
+/**
+ * How long the user has to stop typing before the preview refreshes itself.
+ * Long enough to sit out a normal inter-word pause, short enough that
+ * finishing a sentence and looking up finds the picture already changing.
+ */
+const PREVIEW_TYPING_DELAY_MS = 1500;
 /** Where the editor was left. Per-browser, not per-account: it is a cursor,
  *  not part of the resume, and syncing it would fight between two open tabs. */
 const LAST_SECTION_KEY = "joblit.resume.lastSection";
@@ -325,12 +331,14 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
 
   // One commit = one compile. Held in a ref so the window listener below can
   // be registered once and still read the current draft.
-  const commitPreviewRef = useRef<() => void>(() => {});
+  const commitPreviewRef = useRef<(opts?: { throttled?: boolean }) => void>(
+    () => {},
+  );
   // Synced in an effect, never during render: a commit only ever fires from a
   // blur handler or another effect, both of which run after the commit that
   // wrote this, so it is always current by the time anything reads it.
   useEffect(() => {
-    commitPreviewRef.current = () => {
+    commitPreviewRef.current = (opts) => {
       if (!livePreviewPayload || !livePreviewKey) return;
       if (!previewOpen && !isPreviewPaneVisible) return;
       // A short delay coalesces a blur that is immediately followed by the
@@ -338,9 +346,39 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       schedulePreview(PREVIEW_COMMIT_DELAY_MS, false, {
         payload: livePreviewPayload,
         payloadKey: livePreviewKey,
+        throttled: opts?.throttled,
       });
     };
   });
+
+  // Typing is a commit too, once the typing stops.
+  //
+  // Refreshing only on blur meant the preview sat still for as long as the
+  // user stayed in one field — a whole summary paragraph could be written with
+  // the picture beside it unchanged, which reads as the preview being broken
+  // rather than deliberate. A pause is a good enough signal that a thought is
+  // finished.
+  //
+  // Two guards keep this cheap. schedulePreview drops payloads it has already
+  // rendered and holds compiles to PREVIEW_MIN_INTERVAL_MS apart, so a long
+  // editing run costs one render every few seconds, not one per pause; and
+  // mid-typing drafts that fail the shared schema are skipped before any
+  // request is made.
+  useEffect(() => {
+    if (!livePreviewPayload || !livePreviewKey) return;
+    if (!previewOpen && !isPreviewPaneVisible) return;
+    if (!hasUnpreviewedChanges) return;
+    const timer = window.setTimeout(() => {
+      commitPreviewRef.current({ throttled: true });
+    }, PREVIEW_TYPING_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    livePreviewPayload,
+    livePreviewKey,
+    hasUnpreviewedChanges,
+    previewOpen,
+    isPreviewPaneVisible,
+  ]);
 
   // Leaving a field is the commit. Capture-phase blur on window fires for
   // every element that loses focus, so no per-input wiring is needed — the

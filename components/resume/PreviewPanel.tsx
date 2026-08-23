@@ -1,7 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Download, ExternalLink, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Download, ExternalLink, Minus, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OrbitSpinner } from "@/components/ui/orbit-spinner";
 import {
@@ -52,13 +53,36 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
 
   const currentPdfUrl = pdfUrl ?? null;
 
+  // Zoom is a view setting, not draft state: it never reaches the payload and
+  // is deliberately not persisted. 1 means "fit the pane", which is the only
+  // level most people ever need; the steps above it exist for checking whether
+  // a line actually fits, which is the reason to lean in on a resume.
+  const [zoom, setZoom] = useState(1);
+  const zoomIn = () => setZoom((z) => Math.min(2, Math.round((z + 0.25) * 100) / 100));
+  const zoomOut = () => setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100));
+
   return (
     <div
       data-slot="resume-desktop-preview"
       className={cn("flex flex-col bg-muted/40 dark:bg-muted/20", className)}
     >
       {/* Header — design spec ".preview-head" 44px tall */}
-      <div className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border bg-card px-3">
+      <div className="relative flex h-11 shrink-0 items-center gap-1.5 border-b border-border bg-card px-3">
+        {/* A LaTeX compile takes seconds, and the preview deliberately keeps
+            the previous page painted while it runs — which leaves nothing
+            moving to say work is happening. This indeterminate bar rides the
+            bottom edge of the header for exactly that: it costs no layout, it
+            never covers the document, and it disappears the moment the new
+            page swaps in. */}
+        {previewStatus === "loading" ? (
+          <span
+            aria-hidden
+            data-testid="preview-progress"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden"
+          >
+            <span className="block h-full w-1/3 animate-[resume-preview-progress_1.1s_ease-in-out_infinite] rounded-full bg-emerald-500 motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-60" />
+          </span>
+        ) : null}
         <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           {t("pdfPreview")}
         </span>
@@ -74,6 +98,47 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
           </span>
         ) : null}
         <div className="ml-auto flex items-center gap-1">
+          {/* Zoom. Only meaningful once there is a page to inspect, so it
+              stays out of the way until one exists. */}
+          {currentPdfUrl ? (
+            <div
+              className="mr-1 flex items-center gap-0.5"
+              data-testid="preview-zoom"
+            >
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn("h-7 w-7 rounded-md", COARSE_POINTER_TARGET)}
+                aria-label={t("previewZoomOut")}
+                disabled={zoom <= 0.5}
+                onClick={zoomOut}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <button
+                type="button"
+                onClick={() => setZoom(1)}
+                aria-label={t("previewZoomReset")}
+                data-testid="preview-zoom-level"
+                className="min-w-[3.25rem] rounded-md px-1 py-0.5 text-[11px] tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={cn("h-7 w-7 rounded-md", COARSE_POINTER_TARGET)}
+                aria-label={t("previewZoomIn")}
+                disabled={zoom >= 2}
+                onClick={zoomIn}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : null}
+
           {/* Refresh */}
           <Button
             type="button"
@@ -171,7 +236,7 @@ export function PreviewPanel({ className }: PreviewPanelProps) {
               every pixel, so there is zero leftover background regardless
               of page count or paper size.
             */}
-            <ResumePdfPreview pdfUrl={pdfUrl} maxWidth={760} />
+            <ResumePdfPreview pdfUrl={pdfUrl} maxWidth={760} zoom={zoom} />
           </div>
         )}
 

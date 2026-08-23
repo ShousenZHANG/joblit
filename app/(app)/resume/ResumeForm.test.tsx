@@ -570,7 +570,7 @@ describe("Resume page", () => {
     expect(saveCalls()).toBe(0);
   }, 15_000);
 
-  it("does not compile a preview from typing alone", async () => {
+  it("compiles once the typing stops, without waiting for a commit", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = toUrl(input);
       if (url.startsWith("/api/resume-profile")) {
@@ -598,14 +598,70 @@ describe("Resume page", () => {
     const title = screen.getByLabelText("Title");
     fireEvent.change(title, { target: { value: "Staff Engineer" } });
     fireEvent.change(title, { target: { value: "Staff Platform Engineer" } });
-    // Well past the old 400ms keystroke debounce.
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    // Mid-pause: still quiet. A refresh per keystroke would strobe the preview
+    // and burn the render budget.
+    await new Promise((resolve) => setTimeout(resolve, 600));
     expect(previewCalls()).toBe(1);
 
-    // One commit, one compile — regardless of how many keystrokes preceded it.
+    // Once typing stops the preview catches up on its own — the user never has
+    // to leave the field to see what they wrote.
+    await waitFor(() => expect(previewCalls()).toBe(2), { timeout: 8000 });
+
+    // And the whole burst cost exactly one compile, not one per keystroke.
+    expect(previewCalls()).toBe(2);
+  }, 20_000);
+
+  /**
+   * The render budget is invisible to the user and not something they can act
+   * on, so hitting it must not look like a broken preview. The last good PDF
+   * stays painted and the pending badge already says the draft has moved on.
+   */
+  it("degrades quietly when the render budget is exhausted", async () => {
+    let pdfCalls = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = toUrl(input);
+      if (url.startsWith("/api/resume-profile")) {
+        return new Response(JSON.stringify(populatedProfileJson()), { status: 200 });
+      }
+      if (url === "/api/resume-pdf") {
+        pdfCalls += 1;
+        // First compile succeeds so there is a PDF on screen to protect.
+        if (pdfCalls === 1) {
+          return new Response(new Uint8Array([37, 80, 68, 70]), {
+            status: 200,
+            headers: { "content-type": "application/pdf" },
+          });
+        }
+        return new Response(
+          JSON.stringify({ error: { code: "RATE_LIMITED", message: "slow down" } }),
+          {
+            status: 429,
+            headers: { "content-type": "application/json", "retry-after": "30" },
+          },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderResumePage();
+    expect(await screen.findByLabelText("Title")).toHaveValue("Software Engineer");
+    fireEvent.click(firstButton("Preview"));
+    expect(await screen.findByRole("heading", { name: "PDF preview" })).toBeInTheDocument();
+    await waitFor(() => expect(pdfCalls).toBe(1));
+
+    const title = screen.getByLabelText("Title");
+    fireEvent.change(title, { target: { value: "Staff Platform Engineer" } });
     fireEvent.blur(title);
-    await waitFor(() => expect(previewCalls()).toBe(2));
-  }, 15_000);
+
+    await waitFor(() => expect(pdfCalls).toBe(2));
+
+    // No error banner, and the PDF that was already rendered is still there.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("resume-pdf-preview").length).toBeGreaterThan(0);
+  }, 20_000);
 
   it("does not POST the preview while a required field is mid-edit (no 400 spam)", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

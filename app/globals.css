@@ -2929,3 +2929,15 @@ html:not(.dark) .marketing-cool {
 .landing-flow-dot {
   animation: landing-flow-y 2.4s ease-in-out infinite;
 }
+
+/* Indeterminate progress for the resume preview header. A LaTeX compile takes
+   seconds and the previous page stays painted throughout, so this bar is the
+   only thing that says work is in flight. */
+@keyframes resume-preview-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}

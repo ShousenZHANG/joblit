@@ -27,6 +27,9 @@ interface ResumePdfPreviewProps {
   pdfUrl: string;
   /** Maximum page width in CSS pixels. */
   maxWidth?: number;
+  /** Multiplier on the fitted width. 1 fits the pane; above that the
+   *  container scrolls rather than shrinking the page. */
+  zoom?: number;
   className?: string;
 }
 
@@ -52,7 +55,12 @@ interface ResumePdfPreviewProps {
  *   - First load shows a centered spinner; subsequent loads keep the
  *     old pages visible.
  */
-export function ResumePdfPreview({ pdfUrl, maxWidth = 760, className }: ResumePdfPreviewProps) {
+export function ResumePdfPreview({
+  pdfUrl,
+  maxWidth = 760,
+  zoom = 1,
+  className,
+}: ResumePdfPreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(maxWidth);
   // The currently displayed document. Only updates after a new
@@ -132,6 +140,9 @@ export function ResumePdfPreview({ pdfUrl, maxWidth = 760, className }: ResumePd
   }, []);
 
   const numPages = displayedDoc?.numPages ?? 0;
+  // Zoom multiplies the fitted width. The measured width still drives the fit,
+  // so resizing the pane keeps working at any zoom level.
+  const pageWidth = Math.round(containerWidth * zoom);
 
   return (
     <div
@@ -150,14 +161,14 @@ export function ResumePdfPreview({ pdfUrl, maxWidth = 760, className }: ResumePd
               key={`page-${index + 1}`}
               className="overflow-hidden rounded-sm bg-white shadow-[0_18px_40px_-22px_rgba(15,23,42,0.20),0_4px_12px_-4px_rgba(15,23,42,0.08)] ring-1 ring-border/60"
               style={{
-                width: containerWidth,
-                minHeight: Math.round(containerWidth * A4_HEIGHT_RATIO),
+                width: pageWidth,
+                minHeight: Math.round(pageWidth * A4_HEIGHT_RATIO),
               }}
             >
               <Page
                 pdf={displayedDoc}
                 pageNumber={index + 1}
-                width={containerWidth}
+                width={pageWidth}
                 loading={null}
                 error={null}
                 noData={null}

@@ -26,7 +26,14 @@ export async function POST(req: Request) {
   return withSessionRoute(async ({ userId, requestId }) => {
     // LaTeX compilation is the most expensive request this app serves — cap it
     // per user so one runaway client can't monopolise the render service.
-    const rl = checkRateLimit(`resume-pdf:${userId}`, { limit: 10, windowSeconds: 60 });
+    //
+    // Raised from 10 when the editor started refreshing the preview as the
+    // user types rather than only when a field is committed. The client
+    // throttles itself to one compile per PREVIEW_MIN_INTERVAL_MS, so a single
+    // editor cannot reach this ceiling by typing; it is here to stop a broken
+    // or hostile client, not to pace a working one. A client that does hit it
+    // degrades quietly (see useResumePreview) instead of surfacing an error.
+    const rl = checkRateLimit(`resume-pdf:${userId}`, { limit: 30, windowSeconds: 60 });
     if (!rl.allowed) {
       return NextResponse.json(
         {

@@ -415,7 +415,10 @@
     "sectionPagerAria": "Section navigation",
     "sectionPagerPosition": "{current} of {total}",
     "sectionPagerStart": "Start",
-    "sectionPagerFinish": "Preview and download"
+    "sectionPagerFinish": "Preview and download",
+    "previewZoomIn": "Zoom in",
+    "previewZoomOut": "Zoom out",
+    "previewZoomReset": "Reset zoom to fit"
   },
   "privacy": {
     "title": "Privacy Policy",

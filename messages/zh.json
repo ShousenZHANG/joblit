@@ -415,7 +415,10 @@
     "sectionPagerAria": "章节导航",
     "sectionPagerPosition": "第 {current} / {total} 节",
     "sectionPagerStart": "开头",
-    "sectionPagerFinish": "预览并下载"
+    "sectionPagerFinish": "预览并下载",
+    "previewZoomIn": "放大",
+    "previewZoomOut": "缩小",
+    "previewZoomReset": "恢复适宽"
   },
   "privacy": {
     "title": "隐私政策",
