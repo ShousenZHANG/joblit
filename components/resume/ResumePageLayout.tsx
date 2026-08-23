@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useResumeContext } from "./ResumeContext";
 import { SectionNav } from "./SectionNav";
+import { SectionPager } from "./SectionPager";
 import { PreviewPanel } from "./PreviewPanel";
 import { SaveIndicator } from "./SaveIndicator";
 import { VersionSelector } from "./VersionSelector";
@@ -281,7 +282,7 @@ export function MobilePreviewDialog() {
 }
 
 export function ResumePageLayout() {
-  const { locale } = useResumeContext();
+  const { locale, activeSection } = useResumeContext();
   const formColumnRef = useRef<HTMLDivElement>(null);
 
   /* Lock outer shell scroll — Resume uses fixed-height panels with internal scroll */
@@ -294,8 +295,30 @@ export function ResumePageLayout() {
     };
   }, []);
 
-  // One continuous column of sections, in the locale's own module order, so
-  // the editor mirrors the document it produces.
+  // In focus mode the column swaps its whole contents, so a scroll position
+  // left over from the previous section would drop the user into the middle of
+  // the new one. Below `lg` the column is still one scroll and
+  // `setActiveSection` already scrolls the anchor into view, so this must not
+  // fight it — hence the width check rather than an unconditional reset.
+  useEffect(() => {
+    if (!window.matchMedia("(min-width: 1024px)").matches) return;
+    formColumnRef.current?.scrollTo({ top: 0 });
+  }, [activeSection]);
+
+  // Sections render in the locale's own module order, so the editor mirrors
+  // the document it produces.
+  //
+  // Two layouts from one tree. Below `lg` this is a single scroll: there is no
+  // preview pane at that width, and showing one section at a time with no view
+  // of the whole is exactly what retired the original one-section editor. From
+  // `lg` up the live PDF supplies that overview, so the form focuses on the
+  // active section and the rest are hidden by CSS.
+  //
+  // CSS rather than a JS breakpoint on purpose: every section stays mounted,
+  // so switching keeps its state and costs no remount, there is no
+  // server/client mismatch to flash through on first paint, and `display:none`
+  // takes the hidden fields out of the tab order and the accessibility tree
+  // for free.
   const sections = getSectionIds(locale);
 
   return (
@@ -327,11 +350,22 @@ export function ResumePageLayout() {
               </div>
               <div className="space-y-8">
                 {sections.map((sectionId) => (
-                  <SectionContent key={sectionId} sectionId={sectionId} />
+                  <div
+                    key={sectionId}
+                    data-section-slot={sectionId}
+                    data-active={sectionId === activeSection ? "true" : "false"}
+                    className={sectionId === activeSection ? undefined : "lg:hidden"}
+                  >
+                    <SectionContent sectionId={sectionId} />
+                  </div>
                 ))}
               </div>
             </div>
           </div>
+
+          {/* Focus-mode pager. Hidden below lg, where the column is still one
+              continuous scroll and the rail chips already do this job. */}
+          <SectionPager className="hidden lg:flex" />
         </div>
 
         {/* Desktop preview panel — viewport-fluid width via clamp() so

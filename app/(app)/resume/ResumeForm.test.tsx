@@ -28,6 +28,9 @@ vi.mock("@/components/resume/ResumePdfPreview", () => ({
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // The editor persists which section it was on. Without this, a test that
+  // navigates leaks its cursor into whichever test renders next.
+  window.localStorage.clear();
   guideMocks.isTaskHighlighted.mockClear();
   guideMocks.markTaskComplete.mockClear();
 });
@@ -221,6 +224,73 @@ describe("Resume page", () => {
     expect(collapsedBody).toHaveAttribute("inert");
     expect(screen.queryByRole("textbox", { name: "Full name" })).not.toBeInTheDocument();
     expect(screen.getByTestId("resume-section-experience")).toBeInTheDocument();
+  });
+
+  /**
+   * Focus mode is expressed in CSS, not JS: every section stays mounted and
+   * the inactive ones are hidden from `lg` up. jsdom does not evaluate media
+   * queries, so these assert the class contract that drives it — that the
+   * active section is unhidden and the others carry `lg:hidden` — rather than
+   * computed visibility.
+   */
+  describe("focus mode", () => {
+    const slot = (id: string) =>
+      document.querySelector<HTMLElement>(`[data-section-slot="${id}"]`);
+
+    it("hides the inactive sections from lg up and keeps them mounted", async () => {
+      mockEmptyProfileFetch();
+
+      renderResumePage();
+      await screen.findByRole("heading", { name: "Personal info" });
+
+      expect(slot("personal")).toHaveAttribute("data-active", "true");
+      expect(slot("personal")).not.toHaveClass("lg:hidden");
+      expect(slot("experience")).toHaveAttribute("data-active", "false");
+      expect(slot("experience")).toHaveClass("lg:hidden");
+
+      // Still mounted: switching sections must not remount and lose state, and
+      // below lg the same tree is one continuous scroll.
+      expect(screen.getByTestId("resume-section-experience")).toBeInTheDocument();
+    });
+
+    it("moves between sections from the pager and ends on the download step", async () => {
+      mockEmptyProfileFetch();
+
+      renderResumePage();
+      await screen.findByRole("heading", { name: "Personal info" });
+
+      expect(screen.getByTestId("resume-pager-position")).toHaveTextContent("1 of 6");
+      expect(screen.getByTestId("resume-pager-prev")).toBeDisabled();
+
+      fireEvent.click(screen.getByTestId("resume-pager-next"));
+
+      expect(screen.getByTestId("resume-pager-position")).toHaveTextContent("2 of 6");
+      expect(slot("summary")).toHaveAttribute("data-active", "true");
+      expect(slot("personal")).toHaveClass("lg:hidden");
+      expect(screen.getByTestId("resume-pager-prev")).not.toBeDisabled();
+
+      // Walk to the last section; "next" gives way to the closing action.
+      for (let i = 0; i < 4; i++) {
+        fireEvent.click(screen.getByTestId("resume-pager-next"));
+      }
+
+      expect(screen.getByTestId("resume-pager-position")).toHaveTextContent("6 of 6");
+      expect(screen.queryByTestId("resume-pager-next")).not.toBeInTheDocument();
+      expect(screen.getByTestId("resume-pager-finish")).toBeInTheDocument();
+    });
+
+    it("remembers the section across sessions", async () => {
+      window.localStorage.setItem("joblit.resume.lastSection", "projects");
+      mockEmptyProfileFetch();
+
+      renderResumePage();
+      await screen.findByRole("heading", { name: "Personal info" });
+
+      await waitFor(() =>
+        expect(slot("projects")).toHaveAttribute("data-active", "true"),
+      );
+      expect(screen.getByTestId("resume-pager-position")).toHaveTextContent("4 of 6");
+    });
   });
 
   /**

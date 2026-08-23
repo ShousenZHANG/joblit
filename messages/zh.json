@@ -411,7 +411,11 @@
     "emailHint": "这看起来不像邮箱地址。",
     "urlHint": "这看起来不像网址。",
     "retry": "重试",
-    "sectionEmpty": "还没填写"
+    "sectionEmpty": "还没填写",
+    "sectionPagerAria": "章节导航",
+    "sectionPagerPosition": "第 {current} / {total} 节",
+    "sectionPagerStart": "开头",
+    "sectionPagerFinish": "预览并下载"
   },
   "privacy": {
     "title": "隐私政策",

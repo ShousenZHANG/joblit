@@ -411,7 +411,11 @@
     "emailHint": "That doesn't look like an email address.",
     "urlHint": "That doesn't look like a web address.",
     "retry": "Try again",
-    "sectionEmpty": "Not filled in yet"
+    "sectionEmpty": "Not filled in yet",
+    "sectionPagerAria": "Section navigation",
+    "sectionPagerPosition": "{current} of {total}",
+    "sectionPagerStart": "Start",
+    "sectionPagerFinish": "Preview and download"
   },
   "privacy": {
     "title": "Privacy Policy",

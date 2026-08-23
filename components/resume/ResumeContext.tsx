@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useState,
+  useSyncExternalStore,
   useEffect,
   useMemo,
   useRef,
@@ -37,12 +38,32 @@ export type SectionCompletion = Record<SectionId, boolean>;
  * finishing the field.
  */
 const PREVIEW_COMMIT_DELAY_MS = 120;
+/** Where the editor was left. Per-browser, not per-account: it is a cursor,
+ *  not part of the resume, and syncing it would fight between two open tabs. */
+const LAST_SECTION_KEY = "joblit.resume.lastSection";
+
+/** localStorage does not change under this tab, so there is nothing to
+ *  subscribe to; useSyncExternalStore is here for its server/client snapshot
+ *  split, not for reactivity. */
+const subscribeToNothing = () => () => {};
+const readStoredSection = (): string | null => {
+  try {
+    return window.localStorage.getItem(LAST_SECTION_KEY);
+  } catch {
+    // Private mode or a blocked store: fall back to the default section.
+    return null;
+  }
+};
+const readNoStoredSection = (): string | null => null;
 
 type ResumeContextValue = UseResumeFormReturn &
   UseResumePreviewReturn &
   UseResumeProfilesReturn & {
     /** The section currently under the scroll position (drives the rail). */
     activeSection: SectionId;
+    /** 0-based position of the active section in the locale order. */
+    activeSectionIndex: number;
+    sectionCount: number;
     /** Scrolls the form column to a section and marks it active. */
     setActiveSection: (section: SectionId) => void;
     /** Highlights a section without scrolling — used by the scroll spy. */
@@ -84,16 +105,49 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
   const locale = globalLocale.startsWith("zh") ? "zh-CN" : "en-AU";
 
   const validSections = getSectionIds(locale);
-  // Every section is on screen at once now; `activeSection` is a scroll
-  // position, not a route. It is written by the scroll spy and read back to
-  // highlight the rail. Purely derived against the locale's section list — no
-  // render-phase state adjustment — so a locale switch that drops a section
-  // (CN has no Summary) simply falls back to the first one until the next
-  // scroll event, instead of scheduling a corrective re-render.
-  const [rawActiveSection, setRawActiveSection] = useState<SectionId>("personal");
+  // `activeSection` is which section the editor is on: from `lg` up it is the
+  // one section rendered, below `lg` it is the scroll position the spy reports.
+  // Purely derived against the locale's section list — no render-phase state
+  // adjustment — so a locale switch that drops a section (CN has no Summary)
+  // simply falls back to the first one.
+  //
+  // Resuming where the user left off matters more in focus mode than it did in
+  // the single scroll: the landing section is now the whole screen, so always
+  // opening on Personal info would mean re-navigating every session.
+  //
+  // The stored cursor is read through useSyncExternalStore rather than an
+  // effect. Restoring it in an effect meant a setState during the first commit
+  // — a cascading render, and the lint rule that forbids it is right. This
+  // gives the server "no stored value" and the client the real one, so
+  // hydration matches and React swaps in the restored section itself.
+  const storedSection = useSyncExternalStore(
+    subscribeToNothing,
+    readStoredSection,
+    readNoStoredSection,
+  );
+  // An explicit choice outranks the stored one for the rest of the session.
+  const [chosenSection, setRawActiveSection] = useState<SectionId | null>(null);
+  const rawActiveSection =
+    chosenSection ??
+    (storedSection && (validSections as readonly string[]).includes(storedSection)
+      ? (storedSection as SectionId)
+      : "personal");
   const activeSection = validSections.includes(rawActiveSection)
     ? rawActiveSection
     : validSections[0];
+
+  useEffect(() => {
+    if (chosenSection === null) return;
+    try {
+      window.localStorage.setItem(LAST_SECTION_KEY, activeSection);
+    } catch {
+      // Nothing to do — losing the cursor is not worth surfacing.
+    }
+  }, [chosenSection, activeSection]);
+
+  /** Position of the active section, for the focus-mode pager. */
+  const activeSectionIndex = Math.max(0, validSections.indexOf(activeSection));
+  const sectionCount = validSections.length;
 
   // Scroll anchors, registered by each rendered section. A ref (not state)
   // because registration happens during layout and must not re-render.
@@ -402,6 +456,8 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
         ...preview,
         ...profiles,
         activeSection,
+        activeSectionIndex,
+        sectionCount,
         setActiveSection,
         setActiveSectionQuietly: setRawActiveSection,
         registerSectionNode,
