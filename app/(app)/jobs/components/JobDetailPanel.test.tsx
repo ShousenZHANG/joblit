@@ -125,6 +125,32 @@ describe("JobDetailPanel localization", () => {
   });
 });
 
+describe("JobDetailPanel outbound job link", () => {
+  // The canonical jobUrl strips `www.` as a dedupe key, but LinkedIn's edge
+  // serves a hard 403 to real browsers on the bare host in some regions, so
+  // the outbound link must restore it.
+  it("links a bare-host LinkedIn canonical URL out via www", () => {
+    const view = renderPanel(
+      job({ jobUrl: "https://linkedin.com/jobs/view/4456982427" }),
+    );
+
+    expect(
+      within(view.container).getByRole("link", { name: messages.jobs.openJob }),
+    ).toHaveAttribute(
+      "href",
+      "https://www.linkedin.com/jobs/view/4456982427",
+    );
+  });
+
+  it("leaves non-LinkedIn job URLs untouched", () => {
+    const view = renderPanel(job({ jobUrl: "https://example.com/job-1" }));
+
+    expect(
+      within(view.container).getByRole("link", { name: messages.jobs.openJob }),
+    ).toHaveAttribute("href", "https://example.com/job-1");
+  });
+});
+
 describe("JobDetailPanel touch contract", () => {
   it("keeps compact primary actions touch-sized on coarse pointers", () => {
     const view = renderPanel(job({ status: "APPLIED" }));

@@ -56,6 +56,25 @@ function getStableQueryIdentity(url: URL): string {
   return "";
 }
 
+/**
+ * The href to actually open a stored job URL with. The canonical form strips
+ * `www.` because it is a dedupe key, but LinkedIn's edge serves a hard 403 to
+ * real browsers on the bare host in some regions, so outbound links restore
+ * it. Everything else passes through unchanged.
+ */
+export function externalJobUrl(jobUrl: string): string {
+  try {
+    const parsed = new URL(jobUrl);
+    if (parsed.hostname.toLowerCase() === "linkedin.com") {
+      parsed.hostname = "www.linkedin.com";
+      return parsed.toString();
+    }
+  } catch {
+    // Not a parseable URL; the caller renders what it stored.
+  }
+  return jobUrl;
+}
+
 export function canonicalizeJobUrl(raw: string) {
   const input = raw.trim();
   if (!input) return "";

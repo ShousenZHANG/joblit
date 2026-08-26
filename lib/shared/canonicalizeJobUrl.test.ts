@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalizeJobUrl } from "./canonicalizeJobUrl";
+import { canonicalizeJobUrl, externalJobUrl } from "./canonicalizeJobUrl";
 
 describe("canonicalizeJobUrl", () => {
   it("preserves a non-path job identity while dropping tracking parameters", () => {
@@ -37,5 +37,36 @@ describe("canonicalizeJobUrl", () => {
     ).toBe(
       "https://careers.example.com/apply?job_id=hello%20world%21%27%28%29%2A",
     );
+  });
+});
+
+describe("externalJobUrl", () => {
+  it("upgrades the bare linkedin.com canonical form to www for outbound links", () => {
+    expect(externalJobUrl("https://linkedin.com/jobs/view/4456982427")).toBe(
+      "https://www.linkedin.com/jobs/view/4456982427",
+    );
+  });
+
+  it("leaves an already-www LinkedIn URL untouched", () => {
+    expect(externalJobUrl("https://www.linkedin.com/jobs/view/1")).toBe(
+      "https://www.linkedin.com/jobs/view/1",
+    );
+  });
+
+  it("never rewrites lookalike hosts", () => {
+    expect(externalJobUrl("https://notlinkedin.com/jobs/view/1")).toBe(
+      "https://notlinkedin.com/jobs/view/1",
+    );
+    expect(externalJobUrl("https://linkedin.com.evil.io/jobs/view/1")).toBe(
+      "https://linkedin.com.evil.io/jobs/view/1",
+    );
+  });
+
+  it("passes non-LinkedIn and unparseable values through unchanged", () => {
+    expect(externalJobUrl("https://careers.example.com/apply?job_id=7")).toBe(
+      "https://careers.example.com/apply?job_id=7",
+    );
+    expect(externalJobUrl("not a url")).toBe("not a url");
+    expect(externalJobUrl("")).toBe("");
   });
 });

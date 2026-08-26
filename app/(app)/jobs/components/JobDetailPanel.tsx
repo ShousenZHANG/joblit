@@ -22,6 +22,7 @@ import {
   Trash2,
   Wifi,
 } from "lucide-react";
+import { externalJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { useMarket } from "@/hooks/useMarket";
 import { Button } from "@/components/ui/button";
 import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
@@ -355,7 +356,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   size="sm"
                   className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.8)] transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
                 >
-                  <a href={selectedJob.jobUrl} target="_blank" rel="noreferrer">
+                  <a href={externalJobUrl(selectedJob.jobUrl)} target="_blank" rel="noreferrer">
                     <ExternalLink className="mr-1 h-4 w-4" />
                     {t("openJob")}
                   </a>
