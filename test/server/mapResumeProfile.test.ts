@@ -86,3 +86,23 @@ describe("mapResumeProfile", () => {
   });
 });
 
+
+describe("mapResumeProfile certifications", () => {
+  it("escapes names and urls, drops nameless rows, and caps at six", () => {
+    const mapped = mapResumeProfile({
+      certifications: [
+        { name: "C# & Friends", url: "https://example.com/a?b=1" },
+        { name: "  " },
+        { name: "Plain Cert" },
+        ...Array.from({ length: 7 }, (_, i) => ({ name: `Extra ${i}` })),
+      ],
+    });
+
+    expect(mapped.certifications[0]).toEqual({
+      name: "C\\# \\& Friends",
+      url: "https://example.com/a?b=1",
+    });
+    expect(mapped.certifications[1]).toEqual({ name: "Plain Cert", url: "" });
+    expect(mapped.certifications).toHaveLength(6);
+  });
+});

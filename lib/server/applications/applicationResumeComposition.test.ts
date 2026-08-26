@@ -40,6 +40,7 @@ const master = {
   ],
   projects: [],
   education: [],
+  certifications: [],
 };
 
 function makeCv(overrides: Partial<AiContent["cv"]> = {}): AiContent["cv"] {

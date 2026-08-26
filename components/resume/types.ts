@@ -62,6 +62,12 @@ export type ResumeSkillPayload = {
   items: string[];
 };
 
+export type ResumeCertification = {
+  rowId: string;
+  name: string;
+  url: string;
+};
+
 export type ResumeProfilePayload = {
   id?: string;
   name?: string;
@@ -74,6 +80,7 @@ export type ResumeProfilePayload = {
   projects?: Omit<ResumeProject, "rowId">[] | null;
   education?: Omit<ResumeEducation, "rowId">[] | null;
   skills?: ResumeSkillPayload[] | null;
+  certifications?: Omit<ResumeCertification, "rowId">[] | null;
 };
 
 export type ResumeProfileSummary = {

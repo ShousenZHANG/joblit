@@ -55,6 +55,7 @@ const renderInput = {
   ],
   projects: [],
   education: [],
+  certifications: [],
 };
 
 const profile = {

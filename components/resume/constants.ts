@@ -1,4 +1,4 @@
-import type { ResumeBasics, ResumeLink, ResumeExperience, ResumeProject, ResumeEducation, ResumeSkillGroup } from "./types";
+import type { ResumeBasics, ResumeLink, ResumeExperience, ResumeProject, ResumeEducation, ResumeSkillGroup, ResumeCertification } from "./types";
 
 export const emptyBasics: ResumeBasics = {
   fullName: "",
@@ -48,6 +48,12 @@ export const emptySkillGroup = (): ResumeSkillGroup => ({
   rowId: newRowId(),
   category: "",
   itemsText: "",
+});
+
+export const emptyCertification = (): ResumeCertification => ({
+  rowId: newRowId(),
+  name: "",
+  url: "",
 });
 
 export const defaultLinks: ResumeLink[] = [

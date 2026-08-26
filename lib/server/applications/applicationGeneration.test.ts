@@ -32,6 +32,7 @@ const master = {
   ],
   projects: [],
   education: [],
+  certifications: [],
 };
 
 const profile = {

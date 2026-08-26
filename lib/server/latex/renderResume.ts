@@ -56,10 +56,16 @@ type EducationEntry = {
   detail?: string;
 };
 
+type CertificationEntry = {
+  name: string;
+  url?: string;
+};
+
 type RenderResumeInput = {
   candidate: CandidateInfo;
   summary: string;
   skills: SkillsGroup[];
+  certifications?: CertificationEntry[];
   experiences: ExperienceEntry[];
   projects: ProjectEntry[];
   education: EducationEntry[];
@@ -80,13 +86,23 @@ function readTemplate(relPath: string) {
 
 const replaceAll = replaceTokens;
 
-function renderSkills(groups: SkillsGroup[]) {
-  return groups
-    .map((group) => {
-      const items = group.items.join(", ");
-      return `\\textbf{${group.label}:} ${items} \\\\`;
-    })
-    .join("\n");
+function renderSkills(
+  groups: SkillsGroup[],
+  certifications: CertificationEntry[] = [],
+) {
+  const lines = groups.map((group) => {
+    const items = group.items.join(", ");
+    return `\\textbf{${group.label}:} ${items} \\\\`;
+  });
+  if (certifications.length > 0) {
+    const items = certifications
+      .map((cert) =>
+        cert.url ? `\\href{${cert.url}}{${cert.name}}` : cert.name,
+      )
+      .join(" \\;|\\; ");
+    lines.push(`\\textbf{Certifications:} ${items} \\\\`);
+  }
+  return lines.join("\n");
 }
 
 const renderBullets = sharedRenderBullets;
@@ -206,7 +222,7 @@ export function renderResumeTex(input: RenderResumeInput) {
   });
 
   const skillsRendered = replaceAll(skills, {
-    SKILLS: renderSkills(input.skills),
+    SKILLS: renderSkills(input.skills, input.certifications ?? []),
   });
 
   const experienceRendered = replaceAll(experience, {

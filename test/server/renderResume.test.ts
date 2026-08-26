@@ -154,3 +154,40 @@ describe("renderResumeTex", () => {
     });
   });
 });
+
+describe("certifications render inside the skills block", () => {
+  const minimal = {
+    candidate: {
+      name: "Jane Doe",
+      title: "Engineer",
+      email: "jane@example.com",
+      phone: "+1 555 0100",
+    },
+    summary: "S.",
+    skills: [{ label: "Frontend", items: ["React"] }],
+    experiences: [],
+    projects: [],
+    education: [],
+  };
+
+  it("appends a Certifications line, linking credentials that carry a URL", () => {
+    const output = renderResumeTex({
+      ...minimal,
+      certifications: [
+        { name: "Cert A", url: "https://verify.example.com/a" },
+        { name: "Cert B" },
+      ],
+    });
+
+    expect(output).toContain(
+      "\\textbf{Certifications:} \\href{https://verify.example.com/a}{Cert A} \\;|\\; Cert B",
+    );
+  });
+
+  it("emits no Certifications line when the list is empty or absent", () => {
+    expect(renderResumeTex({ ...minimal })).not.toContain("Certifications:");
+    expect(
+      renderResumeTex({ ...minimal, certifications: [] }),
+    ).not.toContain("Certifications:");
+  });
+});

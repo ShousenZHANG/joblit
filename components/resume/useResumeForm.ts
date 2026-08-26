@@ -9,6 +9,7 @@ import type {
   ResumeProject,
   ResumeEducation,
   ResumeSkillGroup,
+  ResumeCertification,
   ResumeProfilePayload,
   ReorderSection,
 } from "./types";
@@ -18,6 +19,7 @@ import {
   emptyProject,
   emptyEducation,
   emptySkillGroup,
+  emptyCertification,
   defaultLinks,
   newRowId,
 } from "./constants";
@@ -68,6 +70,9 @@ export function useResumeForm(locale: string) {
   const [projects, setProjects] = useState<ResumeProject[]>([emptyProject()]);
   const [education, setEducation] = useState<ResumeEducation[]>([emptyEducation()]);
   const [skills, setSkills] = useState<ResumeSkillGroup[]>([emptySkillGroup()]);
+  // No seeded placeholder row: most profiles carry no certifications, and an
+  // empty row would read as a demand rather than an option.
+  const [certifications, setCertifications] = useState<ResumeCertification[]>([]);
   /**
    * Which repeatable entries are open, per list section, keyed by the row's
    * stable `rowId`.
@@ -313,6 +318,16 @@ export function useResumeForm(locale: string) {
         skillRows = [emptySkillGroup()];
       }
       setSkills(skillRows);
+
+      setCertifications(
+        Array.isArray(profile.certifications)
+          ? profile.certifications.map((cert) => ({
+              rowId: newRowId(),
+              name: cert.name ?? "",
+              url: cert.url ?? "",
+            }))
+          : [],
+      );
 
       setExpandedRowIds(
         initialExpansion({
@@ -593,6 +608,24 @@ export function useResumeForm(locale: string) {
     [forgetRow],
   );
 
+  // --- certifications ---
+  const updateCertification = useCallback(
+    (index: number, field: "name" | "url", value: string) => {
+      setCertifications((prev) =>
+        prev.map((entry, idx) => (idx === index ? { ...entry, [field]: value } : entry)),
+      );
+    },
+    [],
+  );
+
+  const addCertification = useCallback(() => {
+    setCertifications((prev) => [...prev, emptyCertification()]);
+  }, []);
+
+  const removeCertification = useCallback((index: number) => {
+    setCertifications((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
+
   // --- reorder ---
   const moveSectionItem = useCallback(
     (section: ReorderSection, from: number, to: number) => {
@@ -752,6 +785,13 @@ export function useResumeForm(locale: string) {
               (group) => hasContent(group.category) || group.items.length > 0,
             );
 
+      // A certification is renderable with just a name; the schema rejects a
+      // nameless row, so save keeps only rows with a name too — a URL-only
+      // row would 400 the whole save.
+      const cleanedCertifications = certifications
+        .map((cert) => ({ name: cert.name.trim(), url: cert.url.trim() }))
+        .filter((cert) => hasContent(cert.name));
+
       return {
         locale,
         basics,
@@ -761,9 +801,10 @@ export function useResumeForm(locale: string) {
         projects: previewProjects,
         education: previewEducation,
         skills: previewSkills,
+        certifications: cleanedCertifications,
       };
     },
-    [locale, basics, links, summary, experiences, projects, education, skills],
+    [locale, basics, links, summary, experiences, projects, education, skills, certifications],
   );
 
   const hasAnyContent = useMemo(() => {
@@ -800,6 +841,9 @@ export function useResumeForm(locale: string) {
     const skillsFilled = skills.some(
       (group) => hasContent(group.category) || hasContent(group.itemsText),
     );
+    const certificationsFilled = certifications.some(
+      (cert) => hasContent(cert.name) || hasContent(cert.url),
+    );
 
     return (
       basicsFilled ||
@@ -808,9 +852,10 @@ export function useResumeForm(locale: string) {
       experienceFilled ||
       projectsFilled ||
       educationFilled ||
-      skillsFilled
+      skillsFilled ||
+      certificationsFilled
     );
-  }, [basics, links, summary, experiences, projects, education, skills]);
+  }, [basics, links, summary, experiences, projects, education, skills, certifications]);
 
   const isStepValid = useCallback(
     (stepName: string) => {
@@ -918,6 +963,11 @@ export function useResumeForm(locale: string) {
     updateSkillGroup,
     addSkillGroup,
     removeSkillGroup,
+    // certifications
+    certifications,
+    updateCertification,
+    addCertification,
+    removeCertification,
     // reorder
     moveSectionItem,
     moveByStep,

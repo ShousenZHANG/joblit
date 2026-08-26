@@ -158,3 +158,20 @@ describe("renderResumeCNTex", () => {
     expect(skillsIdx).toBeGreaterThan(experienceIdx);
   });
 });
+
+describe("certifications render inside the skills block", () => {
+  it("appends a cert line with linked names, and omits it when absent", () => {
+    const withCerts = renderResumeCNTex({
+      ...fullInput,
+      certifications: [
+        { name: "认证甲", url: "https://verify.example.com/a" },
+        { name: "认证乙" },
+      ],
+    });
+    expect(withCerts).toContain(
+      "\\textbf{证书与认证:} \\href{https://verify.example.com/a}{认证甲}、认证乙",
+    );
+
+    expect(renderResumeCNTex(fullInput)).not.toContain("证书与认证:");
+  });
+});

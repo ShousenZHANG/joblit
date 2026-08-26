@@ -6,6 +6,7 @@ type ResumeProfileLike = {
   basics?: unknown;
   links?: unknown;
   skills?: unknown;
+  certifications?: unknown;
   experiences?: unknown;
   projects?: unknown;
   education?: unknown;
@@ -112,6 +113,16 @@ export function mapResumeProfile(profile: ResumeProfileLike) {
       label: escapeLatex(toStringValue((group as Record<string, unknown>).category) || toStringValue((group as Record<string, unknown>).label)),
       items: asArray(group.items).map((item) => escapeLatex(toStringValue(item))),
     })),
+    certifications: asArray(profile.certifications)
+      .map((item) => {
+        const record = item as Record<string, unknown>;
+        return {
+          name: escapeLatex(toStringValue(record.name)).trim(),
+          url: escapeLatex(toStringValue(record.url)).trim(),
+        };
+      })
+      .filter((cert) => hasText(cert.name))
+      .slice(0, 6),
     experiences: experiences.map((entry) => {
       const links = asArray(entry.links)
         .map((item) => {

@@ -152,3 +152,18 @@ describe("mapResumeProfileCN", () => {
     expect(mapped.contactExtraLine).toBe("");
   });
 });
+
+describe("mapResumeProfileCN certifications", () => {
+  it("maps name and url through LaTeX escaping and drops nameless rows", () => {
+    const mapped = mapResumeProfileCN({
+      certifications: [
+        { name: "微软认证 100%", url: "https://example.com/verify" },
+        { name: "" },
+      ],
+    });
+
+    expect(mapped.certifications).toEqual([
+      { name: "微软认证 100\\%", url: "https://example.com/verify" },
+    ]);
+  });
+});

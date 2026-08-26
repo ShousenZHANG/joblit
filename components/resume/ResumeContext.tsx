@@ -276,9 +276,10 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       education: form.education.some(
         (entry) => entry.school.trim() || entry.degree.trim(),
       ),
-      skills: form.skills.some(
-        (entry) => entry.category.trim() || entry.itemsText.trim(),
-      ),
+      skills:
+        form.skills.some(
+          (entry) => entry.category.trim() || entry.itemsText.trim(),
+        ) || form.certifications.some((cert) => cert.name.trim()),
     }),
     [
       form.basics,
@@ -287,6 +288,7 @@ export function ResumeFormProvider({ children }: { children: ReactNode }) {
       form.projects,
       form.education,
       form.skills,
+      form.certifications,
     ],
   );
 

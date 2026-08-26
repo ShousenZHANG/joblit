@@ -86,6 +86,10 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
     updateSkillGroup,
     addSkillGroup,
     removeSkillGroup,
+    certifications,
+    updateCertification,
+    addCertification,
+    removeCertification,
   } = useResumeContext();
 
   switch (sectionId) {
@@ -179,6 +183,10 @@ function SectionContent({ sectionId }: { sectionId: SectionId }) {
           addSkillGroup={addSkillGroup}
           removeSkillGroup={removeSkillGroup}
           onMove={(from, to) => moveSectionItem("skill", from, to)}
+          certifications={certifications}
+          onUpdateCertification={updateCertification}
+          onAddCertification={addCertification}
+          onRemoveCertification={removeCertification}
         />
       );
     default:

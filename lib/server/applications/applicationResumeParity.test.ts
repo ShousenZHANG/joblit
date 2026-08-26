@@ -59,6 +59,7 @@ const masterRenderInput: ResumeRenderInput = {
   ],
   projects: [],
   education: [],
+  certifications: [],
 };
 
 const profile = {

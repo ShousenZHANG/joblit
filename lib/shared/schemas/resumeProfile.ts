@@ -65,12 +65,22 @@ export const ResumeSkillSchema = z.object({
   items: z.array(z.string().trim().min(1).max(60)).max(30),
 });
 
+export const ResumeCertificationSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  // Verification link is optional: not every credential has a public page.
+  url: z
+    .union([z.string().trim().url().max(300), z.literal("")])
+    .optional()
+    .nullable(),
+});
+
 export const ResumeProfileSchema = z.object({
   locale: z.string().optional().nullable(),
   summary: z.string().trim().min(1).max(2000).optional().nullable(),
   basics: ResumeBasicsSchema.optional().nullable(),
   links: z.array(ResumeLinkSchema).max(8).optional().nullable(),
   skills: z.array(ResumeSkillSchema).max(12).optional().nullable(),
+  certifications: z.array(ResumeCertificationSchema).max(6).optional().nullable(),
   experiences: z.array(ResumeExperienceSchema).max(20).optional().nullable(),
   projects: z.array(ResumeProjectSchema).max(20).optional().nullable(),
   education: z.array(ResumeEducationSchema).max(10).optional().nullable(),

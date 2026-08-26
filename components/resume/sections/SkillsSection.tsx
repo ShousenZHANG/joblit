@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Wrench } from "lucide-react";
+import { Wrench, X } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { EntryCard } from "../EntryCard";
@@ -9,7 +9,7 @@ import { GhostAddRow } from "../GhostAddRow";
 import { ReorderableList } from "../ReorderableList";
 import { SectionShell } from "../SectionShell";
 import { CollapseAllButton } from "../CollapseAllButton";
-import type { ResumeSkillGroup } from "../types";
+import type { ResumeCertification, ResumeSkillGroup } from "../types";
 
 interface SkillsSectionProps {
   skills: ResumeSkillGroup[];
@@ -20,6 +20,14 @@ interface SkillsSectionProps {
   expandedIds: ReadonlySet<string>;
   onToggleExpanded: (rowId: string) => void;
   onCollapseAll: () => void;
+  /**
+   * Certifications live inside this section because both PDF templates render
+   * them as a labelled line of the skills block — the editor mirrors the page.
+   */
+  certifications: ResumeCertification[];
+  onUpdateCertification: (index: number, field: "name" | "url", value: string) => void;
+  onAddCertification: () => void;
+  onRemoveCertification: (index: number) => void;
 }
 
 export function SkillsSection({
@@ -31,6 +39,10 @@ export function SkillsSection({
   expandedIds,
   onToggleExpanded,
   onCollapseAll,
+  certifications,
+  onUpdateCertification,
+  onAddCertification,
+  onRemoveCertification,
 }: SkillsSectionProps) {
   const t = useTranslations("resumeForm");
 
@@ -96,6 +108,50 @@ export function SkillsSection({
             addSkillGroup();
           }}
         />
+
+        <div className="space-y-2 border-t border-border/70 pt-4">
+          <div className="space-y-0.5">
+            <Label className="text-[13px]">{t("certifications")}</Label>
+            <p className="text-xs text-muted-foreground">{t("certificationsDesc")}</p>
+          </div>
+          <div className="space-y-1.5">
+            {certifications.map((cert, index) => (
+              <div key={cert.rowId} className="flex items-center gap-2">
+                <Input
+                  aria-label={`${t("certificationName")} ${index + 1}`}
+                  value={cert.name}
+                  onChange={(e) => onUpdateCertification(index, "name", e.target.value)}
+                  placeholder={t("certificationNamePlaceholder")}
+                  className="min-w-0 flex-1"
+                />
+                <Input
+                  aria-label={`${t("certificationUrl")} ${index + 1}`}
+                  value={cert.url}
+                  inputMode="url"
+                  onChange={(e) => onUpdateCertification(index, "url", e.target.value)}
+                  placeholder={t("certificationUrlPlaceholder")}
+                  className="w-[13rem] shrink-0"
+                />
+                <button
+                  type="button"
+                  aria-label={`${t("remove")} ${cert.name || index + 1}`}
+                  title={t("remove")}
+                  onClick={() => onRemoveCertification(index)}
+                  className="grid h-9 w-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors duration-150 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 motion-reduce:transition-none"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </div>
+            ))}
+          </div>
+          {certifications.length < 6 ? (
+            <GhostAddRow
+              label={t("addCertification")}
+              onClick={onAddCertification}
+              className="py-2 text-xs"
+            />
+          ) : null}
+        </div>
       </div>
     </SectionShell>
   );

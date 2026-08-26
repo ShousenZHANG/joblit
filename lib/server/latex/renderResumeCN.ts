@@ -55,6 +55,11 @@ type EducationEntry = {
   detail?: string;
 };
 
+type CertificationEntry = {
+  name: string;
+  url?: string;
+};
+
 export type RenderResumeCNInput = {
   candidate: CandidateInfo;
   photoBlock: string;
@@ -63,6 +68,7 @@ export type RenderResumeCNInput = {
   linksLine: string;
   summary: string;
   skills: SkillsGroup[];
+  certifications?: CertificationEntry[];
   experiences: ExperienceEntry[];
   projects: ProjectEntry[];
   education: EducationEntry[];
@@ -85,13 +91,25 @@ function readTemplate() {
 
 const replaceAll = replaceTokens;
 
-function renderSkills(groups: SkillsGroup[]) {
-  return groups
-    .map((group) => {
-      const items = group.items.join(", ");
-      return `\\textbf{${group.label}:} ${items}`;
-    })
-    .join(" \\\\\n");
+function renderSkills(
+  groups: SkillsGroup[],
+  certifications: CertificationEntry[] = [],
+) {
+  const lines = groups.map((group) => {
+    const items = group.items.join(", ");
+    return `\\textbf{${group.label}:} ${items}`;
+  });
+  // The CN skills section is titled 技能/证书及其他, so certifications live
+  // here as their own labelled line rather than in a separate section.
+  if (certifications.length > 0) {
+    const items = certifications
+      .map((cert) =>
+        cert.url ? `\\href{${cert.url}}{${cert.name}}` : cert.name,
+      )
+      .join("、");
+    lines.push(`\\textbf{证书与认证:} ${items}`);
+  }
+  return lines.join(" \\\\\n");
 }
 
 const renderBullets = sharedRenderBullets;
@@ -216,7 +234,7 @@ export function renderResumeCNTex(input: RenderResumeCNInput) {
     PERSONAL_INFO_LINE: input.personalInfoLine,
     CONTACT_EXTRA_LINE: input.contactExtraLine,
     LINKS_LINE: input.linksLine,
-    SKILLS: renderSkills(input.skills),
+    SKILLS: renderSkills(input.skills, input.certifications ?? []),
     EXPERIENCE_SECTION: renderExperiences(input.experiences),
     PROJECTS_SECTION: projectsSection,
     EDUCATION_SECTION: educationSection,
