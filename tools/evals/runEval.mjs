@@ -143,21 +143,28 @@ function repairInstruction(error) {
  * an ungrounded number is an evidence problem, and they need opposite fixes.
  */
 function classify(error) {
-  const detail = JSON.stringify(error.details ?? {});
-  if (/summary/i.test(error.code)) {
-    if (detail.includes("ungrounded_number")) return "summary:ungrounded_number";
-    if (detail.includes("ungrounded_skill")) return "summary:ungrounded_skill";
-    if (detail.includes("title_missing")) return "summary:title_missing";
-    return "summary:other";
+  // summaryLint's rejections are already one code per rule, and they carry the
+  // offending token in the message rather than in `details` — reading `details`
+  // here bucketed every summary failure as "other" and hid which rule fired.
+  switch (error.code) {
+    case "SUMMARY_TITLE_MISSING":
+      return "summary:title_missing";
+    case "SUMMARY_UNGROUNDED_NUMBER":
+      return "summary:ungrounded_number";
+    case "SUMMARY_UNGROUNDED_SKILL":
+      return "summary:ungrounded_skill";
+    case "SKILLS_SELECTION_INVALID":
+      return "skills:index_out_of_bounds";
+    default:
+      return `decode:${error.code}`;
   }
-  if (/skill/i.test(error.code)) return "skills:index_out_of_bounds";
-  return `decode:${error.code}`;
 }
 
 function runCase({ profile, job, target, attempts, model, slot }) {
   const basePrompt = buildPrompt(target, profile, job);
   const master = mapResumeProfile(profile);
   const trail = [];
+  const rejections = [];
   let prompt = basePrompt;
   let tokensIn = 0;
   let tokensOut = 0;
@@ -169,7 +176,7 @@ function runCase({ profile, job, target, attempts, model, slot }) {
 
     if (runError) {
       trail.push("runtime_error");
-      return { passed: false, attempts: attempt, trail, tokensIn, tokensOut, note: runError };
+      return { passed: false, attempts: attempt, trail, rejections, tokensIn, tokensOut, note: runError };
     }
 
     const verdict = acceptApplicationGeneration({
@@ -183,20 +190,24 @@ function runCase({ profile, job, target, attempts, model, slot }) {
     });
 
     if (verdict.ok) {
-      return { passed: true, attempts: attempt, trail, tokensIn, tokensOut, note: null };
+      return { passed: true, attempts: attempt, trail, rejections, tokensIn, tokensOut, note: null };
     }
 
     const bucket = classify(verdict.error);
     trail.push(bucket);
+    // Keep the rejection verbatim. Generation is non-deterministic, so a case
+    // that fails here may pass when re-run by hand — without the original
+    // message there is nothing left to diagnose from.
+    rejections.push({ attempt, code: verdict.error.code, message: verdict.error.message });
     // Same failure twice means the model cannot act on the signal; stop
     // spending attempts on it.
     if (trail.length >= 2 && trail.at(-1) === trail.at(-2)) {
-      return { passed: false, attempts: attempt, trail, tokensIn, tokensOut, note: "stalled" };
+      return { passed: false, attempts: attempt, trail, rejections, tokensIn, tokensOut, note: "stalled" };
     }
     prompt = basePrompt + repairInstruction(verdict.error);
   }
 
-  return { passed: false, attempts, trail, tokensIn, tokensOut, note: "exhausted" };
+  return { passed: false, attempts, trail, rejections, tokensIn, tokensOut, note: "exhausted" };
 }
 
 function summarise(rows, args) {
