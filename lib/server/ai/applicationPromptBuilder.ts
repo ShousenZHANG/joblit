@@ -146,6 +146,27 @@ function buildSummaryRulesBlock(job: JobInput): string {
 }
 
 /**
+ * What a top-tier summary looks like, stated as construction rules.
+ *
+ * The compliance rules above only say what gets REJECTED; nothing in them
+ * distinguishes an elite summary from a mediocre one that passes every gate.
+ * These encode the craft: front-loaded identity, outcome density, adjective
+ * discipline. They deliberately never conflict with the gates — every number
+ * and skill they call for must still come from the evidence.
+ */
+function buildSummaryCraftBlock(): string {
+  return [
+    "Summary craft (what separates a top-tier summary from a passing one):",
+    "1) Sentence 1 is identity: the required role phrase + years + domain, angled at this posting's #1 responsibility. A recruiter may read only this sentence; front-load it.",
+    "2) Sentences 2-3 are proof: the one or two strongest outcomes in <candidate-evidence>, each carrying its number (scale, delta, or time saved) and its named tech. Strongest first. Three numbers total is the ceiling — a summary is a highlight, not a ledger.",
+    "3) Outcomes, not duties. Ban: 'responsible for', 'worked on', 'involved in', 'helped with', 'participated in'. Every clause states what changed because of the candidate.",
+    "4) Adjective discipline: an adjective may appear only when the same sentence carries the number or named artifact that proves it. Otherwise delete the adjective, keep the fact.",
+    "5) No first-person pronouns. No throat-clearing ('Highly motivated', 'Dynamic professional', 'Seasoned expert'). No 'proven track record'.",
+    "6) Mirror the posting's own vocabulary for its top responsibility where the evidence honestly supports it; bold only the two or three keywords that decide this role.",
+  ].join("\n");
+}
+
+/**
  * Skills are selected, never written. Every rule here exists because the
  * alternative failure is silent: a plausible skill name the candidate cannot
  * defend reads exactly like a real one on a rendered PDF.
@@ -222,6 +243,10 @@ const RESUME_FEWSHOT_EXAMPLE = [
   '    { "group": 3, "items": [1, 0] }',
   "  ]",
   "}",
+  "",
+  "Anti-example — this register is rejected on sight, even though it passes every mechanical gate:",
+  '"Passionate, results-driven engineer with a proven track record of leveraging cutting-edge technologies to deliver impactful solutions in fast-paced environments."',
+  "Every phrase is an unproven adjective or a duty. It names no role, no number, no artifact. Write the first example's register, never this one.",
 ].join("\n");
 
 const COVER_FEWSHOT_EXAMPLE = [
@@ -352,6 +377,10 @@ export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): str
     "<summary-rules>",
     buildSummaryRulesBlock(input.job),
     "</summary-rules>",
+    "",
+    "<summary-craft>",
+    buildSummaryCraftBlock(),
+    "</summary-craft>",
     "",
     "<skills-selection-rules>",
     buildSkillsSelectionRulesBlock(),
