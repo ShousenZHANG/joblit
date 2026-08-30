@@ -35,6 +35,25 @@ describe("requiredTitlePhrase", () => {
   it("returns null when only a level word remains", () => {
     expect(requiredTitlePhrase("Intern")).toBeNull();
   });
+
+  // A posting that hires several people puts the count in the title. Left in,
+  // the count becomes part of the phrase the summary is required to contain,
+  // and rule 2 then reads that digit as a fabricated number — the two rules
+  // contradict each other and no summary can satisfy both. Found by the eval
+  // harness on a real posting: "AI Engineer x 2".
+  it("strips the headcount a posting appends to the role", () => {
+    expect(requiredTitlePhrase("AI Engineer x 2")).toBe("ai engineer");
+    expect(requiredTitlePhrase("AI Engineer x2")).toBe("ai engineer");
+    expect(requiredTitlePhrase("Data Analyst X 3")).toBe("data analyst");
+    expect(requiredTitlePhrase("2 x Backend Engineer")).toBe("backend engineer");
+  });
+
+  it("keeps a trailing token that is part of the role, not a count", () => {
+    expect(requiredTitlePhrase("Engineer Level 2")).toBe("engineer level 2");
+    expect(requiredTitlePhrase("Support Engineer Tier 3")).toBe(
+      "support engineer tier 3",
+    );
+  });
 });
 
 describe("lintGeneratedSummary", () => {
@@ -85,5 +104,11 @@ describe("lintGeneratedSummary", () => {
 
   it("matches skills through gazetteer aliases", () => {
     expect(lint("AI Engineer working in React.")).toEqual({ ok: true });
+  });
+
+  it("lets a multi-hire posting be satisfied without claiming its count", () => {
+    expect(lint("AI Engineer shipping agents.", "AI Engineer x 2")).toEqual({
+      ok: true,
+    });
   });
 });

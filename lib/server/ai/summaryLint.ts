@@ -82,6 +82,19 @@ const SENIORITY_WORDS = new Set([
 /** Trailing qualifiers a posting bolts onto a title but a summary need not. */
 const TITLE_TAIL_SEPARATORS = /[–—\-|/,:]|\(/;
 
+/**
+ * How many people a posting hires, written into the title: "AI Engineer x 2",
+ * "2 x Backend Engineer".
+ *
+ * It has to come out before the phrase is built. Left in, rule 1 requires the
+ * summary to contain that digit and rule 2 then rejects the same digit as a
+ * number the profile cannot support — two rules that cannot both be satisfied,
+ * so every attempt fails and the repair loop cannot converge. The `x` is what
+ * distinguishes a count from a genuine part of the role: "Engineer Level 2"
+ * and "Support Engineer Tier 3" keep their number.
+ */
+const TITLE_HEADCOUNT = /(?:\s*[x×]\s*\d+\s*$)|(?:^\s*\d+\s*[x×]\s+)/i;
+
 function normalize(value: string): string {
   return value
     .toLowerCase()
@@ -101,7 +114,7 @@ function normalize(value: string): string {
  */
 export function requiredTitlePhrase(jobTitle: string): string | null {
   const [head] = jobTitle.split(TITLE_TAIL_SEPARATORS);
-  const words = normalize(head ?? "")
+  const words = normalize((head ?? "").replace(TITLE_HEADCOUNT, " "))
     .split(" ")
     .filter(Boolean)
     .filter((word) => !SENIORITY_WORDS.has(word));
