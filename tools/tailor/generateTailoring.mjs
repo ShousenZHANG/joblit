@@ -22,10 +22,11 @@ import {
   buildV2ResumeUserPrompt,
   buildV2CoverUserPrompt,
 } from "@/lib/server/ai/applicationPromptBuilder";
+import { computeTop3Coverage } from "@/lib/server/ai/responsibilityCoverage";
 import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
-import { DEFAULT_RULES } from "@/lib/server/ai/promptSkills";
 import { acceptApplicationGeneration } from "@/lib/server/applications/applicationGeneration";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
 
 export const MAX_ATTEMPTS = 3;
 
@@ -90,16 +91,41 @@ export async function readActiveProfile(userId, locale = "en-AU") {
   return latest;
 }
 
-export function buildPrompt(target, profile, job) {
-  const input = {
-    target,
-    rules: DEFAULT_RULES,
-    candidate: buildResumePromptSnapshot(profile),
-    job: { title: job.title, company: job.company, description: job.description },
+/**
+ * Compose the prompt the way `buildApplicationPromptForUser` does — same
+ * rules, same locale parameters, same coverage signal. This used to build
+ * from `DEFAULT_RULES` with no locale, which meant a user's active
+ * PromptRuleTemplate silently did not apply to sidecar generations and a
+ * zh-CN run got the en-AU cover conventions. The one divergence that remains
+ * is deliberate: no promptMeta receipt is minted, because the import claims
+ * no prompt provenance (ADR-0024).
+ */
+export function buildPrompt(target, profile, job, { rules, locale }) {
+  const candidate = buildResumePromptSnapshot(profile);
+  const jobInput = {
+    title: job.title,
+    company: job.company || "the company",
+    description: job.description || "",
   };
   const user =
-    target === "resume" ? buildV2ResumeUserPrompt(input) : buildV2CoverUserPrompt(input);
-  return `${buildV2SystemPrompt(DEFAULT_RULES)}\n\n${user}`;
+    target === "resume"
+      ? buildV2ResumeUserPrompt({
+          target,
+          rules,
+          candidate,
+          job: jobInput,
+          resume: {
+            coverage: computeTop3Coverage(
+              jobInput.description,
+              candidate.experiences?.[0]?.bullets ?? [],
+            ),
+          },
+        })
+      : // The job's market decides the cover conventions; a stored rule
+        // template records one locale per user, so the locale travels
+        // separately, exactly as the prompt route passes it.
+        buildV2CoverUserPrompt({ target, rules, candidate, job: jobInput }, locale);
+  return `${buildV2SystemPrompt(rules, locale)}\n\n${user}`;
 }
 
 function generate(prompt, model) {
@@ -184,7 +210,8 @@ export async function generateTailoring({
   if (!job) throw new Error(`job ${jobId} not found`);
 
   const profile = await readActiveProfile(job.userId, locale);
-  const basePrompt = buildPrompt(target, profile, job);
+  const rules = await getActivePromptSkillRulesForUser(job.userId);
+  const basePrompt = buildPrompt(target, profile, job, { rules, locale });
   const master = mapResumeProfile(profile);
   onProgress({ phase: "prompt", chars: basePrompt.length, job: job.title });
 
