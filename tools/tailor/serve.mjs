@@ -36,20 +36,28 @@ const ALLOWED_ORIGINS = new Set([
   "http://127.0.0.1:3000",
 ]);
 
-function corsHeaders(origin) {
+function corsHeaders(origin, req) {
   if (!origin || !ALLOWED_ORIGINS.has(origin)) return {};
-  return {
+  const headers = {
     "access-control-allow-origin": origin,
     "access-control-allow-methods": "POST, OPTIONS",
     "access-control-allow-headers": "content-type",
     "access-control-max-age": "600",
   };
+  // Private Network Access: a page served from a public origin reaching a
+  // loopback address needs this granted explicitly, or Chrome fails the
+  // request before it is sent — indistinguishable from the sidecar being
+  // down. Only echoed for an origin already on the allowlist.
+  if (req?.headers["access-control-request-private-network"] === "true") {
+    headers["access-control-allow-private-network"] = "true";
+  }
+  return headers;
 }
 
-function send(res, status, body, origin) {
+function send(res, status, body, origin, req) {
   res.writeHead(status, {
     "content-type": "application/json",
-    ...corsHeaders(origin),
+    ...corsHeaders(origin, req),
   });
   res.end(JSON.stringify(body));
 }
@@ -85,17 +93,17 @@ async function handleGenerate(req, res, origin) {
   try {
     body = await readBody(req);
   } catch (error) {
-    send(res, 400, { ok: false, error: error.message }, origin);
+    send(res, 400, { ok: false, error: error.message }, origin, req);
     return;
   }
 
   const { jobId, target = "resume", locale = "en-AU", model } = body;
   if (typeof jobId !== "string" || !jobId) {
-    send(res, 400, { ok: false, error: "jobId is required" }, origin);
+    send(res, 400, { ok: false, error: "jobId is required" }, origin, req);
     return;
   }
   if (target !== "resume" && target !== "cover") {
-    send(res, 400, { ok: false, error: "target must be resume or cover" }, origin);
+    send(res, 400, { ok: false, error: "target must be resume or cover" }, origin, req);
     return;
   }
 
@@ -105,7 +113,7 @@ async function handleGenerate(req, res, origin) {
   res.writeHead(200, {
     "content-type": "application/x-ndjson",
     "cache-control": "no-store",
-    ...corsHeaders(origin),
+    ...corsHeaders(origin, req),
   });
   const emit = (event) => res.write(`${JSON.stringify(event)}\n`);
 
@@ -154,21 +162,21 @@ const server = createServer((req, res) => {
   const origin = req.headers.origin;
 
   if (req.method === "OPTIONS") {
-    res.writeHead(204, corsHeaders(origin));
+    res.writeHead(204, corsHeaders(origin, req));
     res.end();
     return;
   }
   // Lets the page tell "sidecar not running" apart from "sidecar refused", so
   // the button can say which.
   if (req.method === "GET" && req.url === "/health") {
-    send(res, 200, { ok: true, service: "joblit-tailor-sidecar" }, origin);
+    send(res, 200, { ok: true, service: "joblit-tailor-sidecar" }, origin, req);
     return;
   }
   if (req.method === "POST" && req.url === "/generate") {
     void handleGenerate(req, res, origin);
     return;
   }
-  send(res, 404, { ok: false, error: "not found" }, origin);
+  send(res, 404, { ok: false, error: "not found" }, origin, req);
 });
 
 // Loopback only. This process can write to the database as the operator; it
