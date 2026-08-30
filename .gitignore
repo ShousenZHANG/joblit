@@ -86,6 +86,9 @@ skills-lock.json
 everything-claude-code/
 install.cmd
 
+# Playwright MCP page snapshots (written per browsing session, local only)
+.playwright-mcp/
+
 # Generated reports
 # docs/CODEMAPS/ was ignored here as a generated artifact. It is now
 # hand-written and checked in — CLAUDE.md and CONTEXT.md require it.
