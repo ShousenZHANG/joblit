@@ -216,6 +216,11 @@ export async function generateTailoring({
         job,
         target,
         attempts: attempt,
+        // The exact bytes the gate accepted. The import boundary parses the
+        // RAW model shape with the same parser this gate just ran, so this —
+        // not the derived aiContent aggregate — is what a caller must submit.
+        // Feeding the aggregate back looks plausible and fails the parse.
+        rawOutput: raw,
         aiContent: verdict.aiContent,
         coverQualityGate: verdict.coverQualityGate,
         coverQualityIssueCount: verdict.coverQualityIssueCount,

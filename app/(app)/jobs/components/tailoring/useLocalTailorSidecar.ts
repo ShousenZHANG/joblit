@@ -112,11 +112,18 @@ export function useLocalTailorSidecar(): LocalTailorSidecar {
 
             const event = JSON.parse(line) as
               | SidecarPhase
-              | { phase: "done"; ok: boolean; aiContent?: unknown; note?: string; error?: string; rejections?: { code: string; message: string }[] };
+              | { phase: "done"; ok: boolean; rawOutput?: string; aiContent?: unknown; note?: string; error?: string; rejections?: { code: string; message: string }[] };
 
             if (event.phase === "done") {
-              if (event.ok && event.aiContent) {
-                generated = JSON.stringify(event.aiContent, null, 2);
+              if (event.ok && (event.rawOutput || event.aiContent)) {
+                // The import boundary parses the RAW model shape — top-level
+                // cvSummary/skillsSelection — with the same parser the
+                // sidecar's gate ran, so the accepted bytes go through
+                // verbatim. The aggregate fallback only serves a sidecar
+                // older than this field; its import will be refused with the
+                // shape error, which at least says what to restart.
+                generated =
+                  event.rawOutput ?? JSON.stringify(event.aiContent, null, 2);
               } else {
                 const last = event.rejections?.at(-1);
                 failure =

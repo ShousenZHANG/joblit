@@ -97,6 +97,15 @@ occurring. The offline message names that script rather than a command to
 type. This is the residual friction ADR-0022 identified and this decision
 never claimed to remove: a process still has to be running.
 
+**The chain submits the raw accepted bytes, not the gate's aggregate.** The
+gate consumes the raw model shape (`cvSummary`/`skillsSelection`) and emits a
+derived AI Content aggregate. Both are JSON and both look importable; only the
+raw form is. The sidecar therefore returns the exact bytes its gate accepted
+and the browser submits them verbatim — the server parses them with the same
+parser the gate ran, so with the locale matched there is nothing left to
+diverge on. The dialog tests enforce this with the production parser, because
+a mock that accepts any body is how the aggregate shipped in the first place.
+
 **No prompt provenance is claimed.** `promptMeta` was the receipt that a pasted
 answer came from the prompt the server had issued — a guard against a human
 pasting a stale prompt. The sidecar builds its own prompt from the profile as

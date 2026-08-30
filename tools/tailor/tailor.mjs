@@ -52,7 +52,9 @@ async function main() {
     process.stderr.write(
       `PASS on attempt ${result.attempts}  tokens in=${result.tokensIn} out=${result.tokensOut}\n`,
     );
-    process.stdout.write(JSON.stringify(result.aiContent, null, 2));
+    // The raw accepted bytes — the shape the import boundary parses. The
+    // derived aiContent aggregate is a gate OUTPUT and is refused there.
+    process.stdout.write(result.rawOutput);
     return;
   }
 

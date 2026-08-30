@@ -11,6 +11,7 @@ vi.mock("@/app/GuideContext", () => ({
 }));
 
 import messages from "@/messages/en.json";
+import { parseResumeManualOutput } from "@/lib/server/applications/manualImportParser";
 import { TailorDialog } from "./TailorDialog";
 import { useTailorReviewController } from "../../hooks/useTailorReviewController";
 import type { JobItem } from "../../types";
@@ -121,9 +122,15 @@ function ndjson(events: unknown[]): Response {
   return { ok: true, status: 200, body } as unknown as Response;
 }
 
+/** The raw model shape the import boundary parses — what the sidecar returns. */
+const RAW_OUTPUT = JSON.stringify({
+  cvSummary: SUMMARY,
+  skillsSelection: [{ group: 0, items: [0] }],
+});
+
 const GENERATED = [
   { phase: "generate", attempt: 1, of: 3 },
-  { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
+  { phase: "done", ok: true, attempts: 1, rawOutput: RAW_OUTPUT, aiContent: AI_CONTENT },
 ];
 
 function Harness({
@@ -333,6 +340,14 @@ describe("TailorDialog", () => {
     expect(
       calls.some((call) => call.url.startsWith("/api/applications/prompt")),
     ).toBe(false);
+
+    // Contract, enforced with the production parser rather than a mock that
+    // accepts anything: what the chain submits must be the RAW model shape.
+    // This is the assertion that was missing when the chain shipped the
+    // aiContent aggregate and every mocked test stayed green while the real
+    // import refused it.
+    expect(parseResumeManualOutput(body.modelOutput).data).not.toBeNull();
+    expect(body.modelOutput).toBe(RAW_OUTPUT);
   });
 
   it("falls back to the review step when publishing fails after import", async () => {
@@ -436,9 +451,7 @@ describe("TailorDialog", () => {
         name: messages.tailor.dialog.generateCopyOutput,
       }),
     );
-    await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith(JSON.stringify(AI_CONTENT, null, 2)),
-    );
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(RAW_OUTPUT));
   });
 
   // The local generator is a separate process someone has to start, so a

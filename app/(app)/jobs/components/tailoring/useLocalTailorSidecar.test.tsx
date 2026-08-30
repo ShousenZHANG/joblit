@@ -24,20 +24,29 @@ function streamOf(events: unknown[]): Response {
 }
 
 const AI_CONTENT = { cv: { summary: { aiText: "Tailored." } } };
+const RAW_OUTPUT = '{ "cvSummary": "Tailored.", "skillsSelection": [] }';
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("useLocalTailorSidecar", () => {
-  it("returns the generated JSON and reports progress along the way", async () => {
+  // The import boundary parses the RAW model shape, so the hook must hand back
+  // the exact bytes the sidecar's gate accepted — not the derived aggregate.
+  it("returns the raw accepted output and reports progress along the way", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
         streamOf([
           { phase: "prompt", chars: 20000, job: "AI Engineer" },
           { phase: "generate", attempt: 1, of: 3 },
-          { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
+          {
+            phase: "done",
+            ok: true,
+            attempts: 1,
+            rawOutput: RAW_OUTPUT,
+            aiContent: AI_CONTENT,
+          },
         ]),
       ),
     );
@@ -48,9 +57,28 @@ describe("useLocalTailorSidecar", () => {
       generated = await result.current.generate({ jobId: "job-1", target: "resume" });
     });
 
-    expect(generated).toBe(JSON.stringify(AI_CONTENT, null, 2));
+    expect(generated).toBe(RAW_OUTPUT);
     expect(result.current.error).toBeNull();
     expect(result.current.running).toBe(false);
+  });
+
+  // A sidecar older than the rawOutput field still answers; falling back to
+  // the aggregate keeps the failure visible at import rather than silent here.
+  it("falls back to the aggregate when an old sidecar omits rawOutput", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        streamOf([{ phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT }]),
+      ),
+    );
+
+    const { result } = renderHook(() => useLocalTailorSidecar());
+    let generated: string | null = null;
+    await act(async () => {
+      generated = await result.current.generate({ jobId: "job-1", target: "resume" });
+    });
+
+    expect(generated).toBe(JSON.stringify(AI_CONTENT, null, 2));
   });
 
   it("surfaces the last gate rejection when the loop gives up", async () => {

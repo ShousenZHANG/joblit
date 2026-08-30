@@ -136,6 +136,9 @@ async function handleGenerate(req, res, origin) {
             ok: true,
             attempts: result.attempts,
             target: result.target,
+            // What the browser must submit to the import route: the raw
+            // model output the gate accepted, not the derived aggregate.
+            rawOutput: result.rawOutput,
             aiContent: result.aiContent,
             coverQualityGate: result.coverQualityGate,
             tokensIn: result.tokensIn,
