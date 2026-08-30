@@ -190,7 +190,21 @@ function runCase({ profile, job, target, attempts, model, slot }) {
     });
 
     if (verdict.ok) {
-      return { passed: true, attempts: attempt, trail, rejections, tokensIn, tokensOut, note: null };
+      return {
+        passed: true,
+        attempts: attempt,
+        trail,
+        rejections,
+        tokensIn,
+        tokensOut,
+        note: null,
+        // The cover path's quality check is advisory: it reports issues and
+        // lets the draft through. Recording it as a plain pass made the cover
+        // run score 100%, which only ever proved the JSON parsed. Carry the
+        // soft verdict so the run can report on the half the gates don't block.
+        softFail: verdict.coverQualityGate === "soft-fail",
+        qualityIssues: verdict.coverQualityIssueCount,
+      };
     }
 
     const bucket = classify(verdict.error);
@@ -263,6 +277,21 @@ function summarise(rows, args) {
       `  ${id.padEnd(18)} first ${String(e.first).padStart(2)}/${e.n}   eventual ${String(e.pass).padStart(2)}/${e.n}`,
     );
   }
+  // Only meaningful on the cover path, where the quality check advises rather
+  // than blocks. Without this line a cover run reports 100% and says nothing.
+  const accepted = rows.filter((r) => r.passed);
+  const softFails = accepted.filter((r) => r.softFail).length;
+  if (accepted.some((r) => r.qualityIssues !== undefined)) {
+    const issues = accepted.reduce((s, r) => s + (r.qualityIssues ?? 0), 0);
+    lines.push(
+      "",
+      "## Advisory quality (accepted drafts only, does not block)",
+      "",
+      `  soft-fail:      ${softFails}/${accepted.length}  ${((softFails / Math.max(accepted.length, 1)) * 100).toFixed(1)}%`,
+      `  issues flagged: ${issues}  (${(issues / Math.max(accepted.length, 1)).toFixed(2)} per accepted draft)`,
+    );
+  }
+
   const tokensIn = rows.reduce((s, r) => s + r.tokensIn, 0);
   const tokensOut = rows.reduce((s, r) => s + r.tokensOut, 0);
   lines.push("", `tokens: in=${tokensIn} out=${tokensOut}  (subscription, no API spend)`);
