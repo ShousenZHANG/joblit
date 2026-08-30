@@ -725,9 +725,9 @@
       "parseInvalid": "还不是这份文档的有效结果",
       "importResult": "导入",
       "importing": "导入中…",
-      "generateLocally": "AI 生成",
+      "generateLocally": "AI 生成 PDF",
       "generateRunning": "生成中…",
-      "generateHint": "在你的电脑上运行，使用你自己的模型。",
+      "generateHint": "在你的电脑上用你自己的模型运行，校验通过后直接发布 PDF。",
       "generateAttempt": "第 {attempt} 次 / 共 {total} 次…",
       "generateRepairing": "被校验拒绝（{code}），正在重试…",
       "generatorOffline": "本地生成器未启动。运行：node --env-file=.env --experimental-loader ./tools/evals/aliasLoader.mjs tools/tailor/serve.mjs",
@@ -745,7 +745,10 @@
       "loadingDraft": "正在载入已保存的定制内容…",
       "errorFinalize": "发布失败",
       "errorDiscard": "放弃修改失败",
-      "errorSaveStillOpen": "保存失败，你的修改仍在这里。"
+      "errorSaveStillOpen": "保存失败，你的修改仍在这里。",
+      "generatePublishing": "正在发布 PDF…",
+      "generatePublishedToast": "PDF 已发布",
+      "generatePublishFailedToast": "已生成并导入，但发布失败。请校对后手动发布。"
     },
     "skills": {
       "title": "本份简历的技能",

@@ -47,9 +47,20 @@ build prompt (Joblit's own builder)
   -> accepted? hand the JSON to the browser
 ```
 
-The browser puts that JSON into the same textarea a user would have pasted
-into, and the existing import path runs unchanged. The server sees exactly
-what it saw before.
+The browser then drives the same two session-authenticated calls a user would
+have clicked through — import, then finalize — so one click ends at the
+published PDF. The server sees exactly what it saw before; only the number of
+human clicks changed. If the server refuses the import, the JSON falls back
+into the paste box next to the error; if only the PDF render fails, the
+imported draft lands on the review step for a manual publish.
+
+**What one-click deliberately skips.** The review step is a prose-quality
+check by a human — the gates verify groundedness, not writing. Chaining
+straight to finalize trades that reading away for speed, with the operator's
+eyes open: the review UI stays fully available afterwards (edit and re-publish
+at any time), and the manual path still stops at review. This trade is
+acceptable only because the operator is the sole user; a product default would
+keep the human read.
 
 **Why loopback rather than the server.** Vercel cannot reach a laptop, and
 moving generation server-side would mean the server holding a model

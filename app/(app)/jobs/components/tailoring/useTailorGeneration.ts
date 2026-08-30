@@ -76,7 +76,12 @@ export interface TailorGeneration {
   importing: boolean;
   importError: string | null;
   clearImportError: () => void;
-  importOutput: (modelOutput: string) => Promise<string | null>;
+  /**
+   * Returns the full import response, not just the id: the one-click chain
+   * finalizes immediately afterwards and needs `aiContentHash` as its CAS
+   * baseline without a second round trip.
+   */
+  importOutput: (modelOutput: string) => Promise<ManualGenerateDraftResponse | null>;
 }
 
 const EMPTY_PROMPT: TailorPromptState = {
@@ -352,17 +357,16 @@ export function useTailorGeneration({
   const clearImportError = useCallback(() => setImportError(null), []);
 
   const importOutput = useCallback(
-    async (modelOutput: string): Promise<string | null> => {
+    async (modelOutput: string): Promise<ManualGenerateDraftResponse | null> => {
       setImporting(true);
       setImportError(null);
       try {
-        const draft = await persistGeneratedDraft({
+        return await persistGeneratedDraft({
           jobId: job.id,
           target,
           modelOutput,
           promptMeta: prompt.meta,
         });
-        return draft.applicationId;
       } catch (error) {
         if (mountedRef.current) {
           setImportError(getErrorMessage(error, "Import failed"));

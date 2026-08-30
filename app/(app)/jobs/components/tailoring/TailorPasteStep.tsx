@@ -26,7 +26,7 @@ interface TailorPasteStepProps {
   importError: string | null;
   onImport: () => void;
   /**
-   * Fills the box from the local sidecar instead of a copy-paste round trip.
+   * Runs the whole chain from the local sidecar: generate, import, publish.
    * Absent when there is no job to generate for, which keeps the manual path
    * working on its own.
    */

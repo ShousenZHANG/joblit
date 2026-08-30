@@ -10,7 +10,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
 import type { JobItem } from "../../types";
+import { getErrorMessage } from "../../types";
 import {
   DocumentTargetTabs,
   type DocumentTargetIndicator,
@@ -20,7 +22,7 @@ import { TailorLockedSteps } from "./TailorLockedSteps";
 import { TailorPasteStep } from "./TailorPasteStep";
 import { useLocalTailorSidecar } from "./useLocalTailorSidecar";
 import { TailorPromptStep } from "./TailorPromptStep";
-import type { TailorTarget } from "./tailorActions";
+import { finalizeApplication, type TailorTarget } from "./tailorActions";
 import type {
   TailorPhase,
   TailorReviewDraft,
@@ -130,26 +132,89 @@ function TailorDialogBody({
   });
 
   const sidecar = useLocalTailorSidecar();
+  const { toast } = useToast();
+  // The auto chain's own stage marker, separate from `generation.importing`:
+  // the manual Import button shares that flag, and the generate button must
+  // not claim its progress.
+  const [autoStage, setAutoStage] = useState<"importing" | "publishing" | null>(
+    null,
+  );
 
-  // Fills the paste box from the local generator instead of a copy-paste round
-  // trip. The result still goes through the same import, so the server's gates
-  // remain the only judge either way.
+  // One click, one outcome: generate, import and publish as a single chain, so
+  // the button hands back a finished PDF rather than JSON to shepherd through
+  // three more steps. The server's gates stay the only judge — the chain calls
+  // the same session-authed routes the manual path does — and each stage falls
+  // back to the manual flow it replaced.
   const generateLocally = useCallback(async () => {
     const generated = await sidecar.generate({ jobId: job.id, target });
-    if (generated) {
-      setOutputs((current) => ({ ...current, [target]: generated }));
+    if (!generated) return;
+    setAutoStage("importing");
+    try {
+      const imported = await generation.importOutput(generated);
+      if (!imported) {
+        // The server refused what the sidecar accepted (or the request never
+        // arrived). Land the JSON in the paste box next to the import error so
+        // nothing is lost and the manual path takes over.
+        setOutputs((current) => ({ ...current, [target]: generated }));
+        return;
+      }
+      // Drop the explicit "paste" expansion so the accordion derives its phase
+      // from the document again — review after a failed publish, collapsed
+      // receipts after a successful one.
+      setPhaseOverrides((current) => ({ ...current, [target]: null }));
+      setAutoStage("publishing");
+      try {
+        const result = await finalizeApplication({
+          applicationId: imported.applicationId,
+          target,
+          expectedHash: imported.aiContentHash,
+        });
+        await onImported({
+          applicationId: imported.applicationId,
+          jobId: job.id,
+          target,
+        });
+        handleFinalized({
+          target,
+          resumePdfUrl: result.resumePdfUrl,
+          resumePdfName: result.resumePdfName,
+          coverPdfUrl: result.coverPdfUrl,
+          coverPdfName: result.coverPdfName,
+        });
+        toast({ title: t("generatePublishedToast"), duration: 2600 });
+      } catch (error) {
+        // The draft imported fine; only the render failed. Load the review
+        // step so the user can publish manually once the cause is fixed.
+        await onImported({
+          applicationId: imported.applicationId,
+          jobId: job.id,
+          target,
+        });
+        toast({
+          title: t("generatePublishFailedToast"),
+          description: getErrorMessage(error, t("errorFinalize")),
+          variant: "destructive",
+          duration: 4000,
+        });
+      }
+    } finally {
+      setAutoStage(null);
     }
-  }, [job.id, sidecar, target]);
+  }, [generation, handleFinalized, job.id, onImported, sidecar, t, target, toast]);
 
   const sidecarStatus =
-    sidecar.progress?.phase === "generate"
-      ? t("generateAttempt", {
-          attempt: sidecar.progress.attempt,
-          total: sidecar.progress.of,
-        })
-      : sidecar.progress?.phase === "rejected"
-        ? t("generateRepairing", { code: sidecar.progress.code })
-        : null;
+    autoStage === "importing"
+      ? t("importing")
+      : autoStage === "publishing"
+        ? t("generatePublishing")
+        : sidecar.progress?.phase === "generate"
+          ? t("generateAttempt", {
+              attempt: sidecar.progress.attempt,
+              total: sidecar.progress.of,
+            })
+          : sidecar.progress?.phase === "rejected"
+            ? t("generateRepairing", { code: sidecar.progress.code })
+            : null;
 
   const publication = draft?.initialPublication ?? null;
   const importedFor = (forTarget: TailorTarget) =>
@@ -188,9 +253,13 @@ function TailorDialogBody({
   };
 
   async function importCurrentOutput() {
-    const applicationId = await generation.importOutput(outputs[target]);
-    if (!applicationId) return;
-    const loaded = await onImported({ applicationId, jobId: job.id, target });
+    const imported = await generation.importOutput(outputs[target]);
+    if (!imported) return;
+    const loaded = await onImported({
+      applicationId: imported.applicationId,
+      jobId: job.id,
+      target,
+    });
     if (loaded) {
       setOutputs((current) => ({ ...current, [target]: "" }));
       setPhaseOverrides((current) => ({ ...current, [target]: null }));
@@ -254,7 +323,7 @@ function TailorDialogBody({
               importError={generation.importError}
               onImport={() => void importCurrentOutput()}
               onGenerate={() => void generateLocally()}
-              generating={sidecar.running}
+              generating={sidecar.running || autoStage !== null}
               generateStatus={sidecarStatus}
               generateError={sidecar.error}
               generatorOffline={sidecar.offline}

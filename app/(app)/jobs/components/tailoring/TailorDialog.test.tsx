@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ReadableStream as NodeReadableStream } from "node:stream/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const guide = vi.hoisted(() => ({ markTaskComplete: vi.fn() }));
@@ -91,6 +92,34 @@ function json(data: unknown, status = 200) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+const PUBLICATION_FINAL = {
+  status: "FINAL",
+  resume: {
+    status: "FINAL",
+    contentHash: "resume-content",
+    publishedHash: "resume-content",
+  },
+  cover: { status: "MISSING", contentHash: null, publishedHash: null },
+};
+
+/**
+ * Serves NDJSON the way the sidecar does: one event per line. jsdom has no
+ * `ReadableStream`, so this borrows Node's — the client only calls
+ * `getReader()`, which both implementations share.
+ */
+function ndjson(events: unknown[]): Response {
+  const body = new NodeReadableStream<Uint8Array>({
+    start(controller) {
+      const encoder = new TextEncoder();
+      for (const event of events) {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      }
+      controller.close();
+    },
+  });
+  return { ok: true, status: 200, body } as unknown as Response;
 }
 
 function Harness() {
@@ -560,5 +589,157 @@ describe("TailorDialog", () => {
     expect(
       await screen.findByText(messages.tailor.dialog.generatorOffline),
     ).toBeInTheDocument();
+  });
+
+  it("one click generates, imports and publishes the PDF", async () => {
+    const user = userEvent.setup();
+    const calls = stubRoutes();
+    renderHarness();
+    await openPasteStep(user);
+
+    // The sidecar streams off-origin; app routes fall through to stubRoutes.
+    // Snapshot reads that land after finalize see the published state, the way
+    // the real snapshot would.
+    const appFetch = globalThis.fetch as typeof fetch;
+    let finalized = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("127.0.0.1")) {
+          return ndjson([
+            { phase: "generate", attempt: 1, of: 3 },
+            { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
+          ]);
+        }
+        if (url.includes("/finalize")) finalized = true;
+        if (url.includes("/review-snapshot") && finalized) {
+          return json({
+            ...SNAPSHOT,
+            publication: PUBLICATION_FINAL,
+            documents: {
+              resume: {
+                pdfUrl: "https://example.com/final-cv.pdf",
+                pdfName: "Alex CV.pdf",
+              },
+              cover: { pdfUrl: null, pdfName: "Alex CL.pdf" },
+            },
+          });
+        }
+        return appFetch(input, init);
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: messages.tailor.dialog.generateLocally,
+      }),
+    );
+
+    // The chain ends on the published receipt with the PDF link — no manual
+    // import or publish click in between.
+    expect(
+      await screen.findByRole("link", { name: messages.tailor.dialog.openPdf }),
+    ).toHaveAttribute("href", "https://example.com/final-cv.pdf");
+    expect(
+      screen.getByText(messages.tailor.dialog.publishedSummary),
+    ).toBeInTheDocument();
+
+    expect(
+      calls.some((call) =>
+        call.url.startsWith("/api/applications/manual-generate"),
+      ),
+    ).toBe(true);
+    const finalizeCall = calls.find((call) =>
+      call.url.includes("/finalize?target=resume"),
+    );
+    // The CAS baseline travels straight from the import response.
+    expect(JSON.parse(String(finalizeCall?.init?.body))).toEqual({
+      expectedHash: "content-hash",
+    });
+  });
+
+  it("falls back to the review step when publishing fails after import", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderHarness();
+    await openPasteStep(user);
+
+    const appFetch = globalThis.fetch as typeof fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("127.0.0.1")) {
+          return ndjson([
+            { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
+          ]);
+        }
+        if (url.includes("/finalize")) {
+          return json(
+            { error: { code: "RENDER_FAILED", message: "LaTeX render failed" } },
+            502,
+          );
+        }
+        return appFetch(input, init);
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: messages.tailor.dialog.generateLocally,
+      }),
+    );
+
+    // The imported draft still lands on review, and nothing claims to be
+    // published.
+    expect(
+      await screen.findByLabelText(messages.tailor.summary.aria),
+    ).toHaveValue(SUMMARY);
+    expect(
+      screen.queryByText(messages.tailor.dialog.publishedSummary),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the generated JSON in the paste box when the server refuses the import", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderHarness();
+    await openPasteStep(user);
+
+    const appFetch = globalThis.fetch as typeof fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("127.0.0.1")) {
+          return ndjson([
+            { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
+          ]);
+        }
+        if (url.startsWith("/api/applications/manual-generate")) {
+          return json(
+            { error: { code: "SUMMARY_TOO_SHORT", message: "Summary too short" } },
+            422,
+          );
+        }
+        return appFetch(input, init);
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: messages.tailor.dialog.generateLocally,
+      }),
+    );
+
+    // Nothing is lost: the JSON waits in the manual path next to the error.
+    const textarea = await screen.findByLabelText(
+      messages.tailor.dialog.pasteLabel,
+    );
+    await waitFor(() =>
+      expect(textarea).toHaveValue(JSON.stringify(AI_CONTENT, null, 2)),
+    );
+    expect(await screen.findByText(/Summary too short/)).toBeInTheDocument();
   });
 });
