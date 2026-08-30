@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Drives the local tailoring sidecar from the browser.
@@ -17,6 +17,15 @@ import { useCallback, useRef, useState } from "react";
  */
 
 const DEFAULT_ORIGIN = "http://127.0.0.1:8791";
+
+/**
+ * The sidecar runs the model with `spawnSync`, so a wedged model call blocks
+ * its event loop and it answers nothing further — not even /health. Without a
+ * deadline the button would sit on "Generating…" forever with no way back,
+ * and there is no manual path to fall back to any more. Generous enough for a
+ * three-attempt repair loop on a long job description.
+ */
+const REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 
 export type SidecarPhase =
   | { phase: "prompt"; chars: number; job: string }
@@ -61,6 +70,10 @@ export function useLocalTailorSidecar(): LocalTailorSidecar {
     async ({ jobId, target, locale }) => {
       const controller = new AbortController();
       abortRef.current = controller;
+      const deadline = setTimeout(
+        () => controller.abort(new DOMException("timeout", "TimeoutError")),
+        REQUEST_TIMEOUT_MS,
+      );
       setRunning(true);
       setProgress(null);
       setError(null);
@@ -122,7 +135,12 @@ export function useLocalTailorSidecar(): LocalTailorSidecar {
         }
         return generated;
       } catch (caught) {
-        if (controller.signal.aborted) return null;
+        if (controller.signal.aborted) {
+          if (controller.signal.reason?.name === "TimeoutError") {
+            setError("The local generator stopped responding.");
+          }
+          return null;
+        }
         // A refused connection and a DNS-less loopback both surface as a
         // TypeError from fetch, and both mean the same thing to the user.
         const isUnreachable = caught instanceof TypeError;
@@ -136,12 +154,18 @@ export function useLocalTailorSidecar(): LocalTailorSidecar {
         );
         return null;
       } finally {
+        clearTimeout(deadline);
         setRunning(false);
         abortRef.current = null;
       }
     },
     [],
   );
+
+  // A generation outlives the dialog otherwise: the fetch keeps streaming into
+  // a component nobody is looking at, and its state updates land on an
+  // unmounted tree.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   return { running, progress, error, offline, generate, reset };
 }

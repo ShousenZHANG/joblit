@@ -44,15 +44,6 @@ export type CoverSource = "ai" | "fallback" | "manual_import" | "local_ai";
 export type ResumeImportOutput = ResumeGenerationOutput;
 export type CoverImportOutput = CoverGenerationOutput;
 
-export type ExternalPromptMeta = {
-  ruleSetId: string;
-  resumeSnapshotUpdatedAt: string;
-  promptTemplateVersion?: string;
-  schemaVersion?: string;
-  skillPackVersion?: string;
-  promptHash?: string;
-};
-
 export function getErrorMessage(err: unknown, fallback = "Failed") {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;

@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { marketStringToResumeLocale } from "@/lib/shared/market";
 import type { JobItem } from "../../types";
 import { getErrorMessage } from "../../types";
 import {
@@ -18,17 +19,16 @@ import {
   type DocumentTargetIndicator,
 } from "./DocumentTargetTabs";
 import { TailorDraftSteps } from "./TailorDraftSteps";
+import { TailorGeneratePanel } from "./TailorGeneratePanel";
 import { TailorLockedSteps } from "./TailorLockedSteps";
-import { TailorPasteStep } from "./TailorPasteStep";
 import { useLocalTailorSidecar } from "./useLocalTailorSidecar";
-import { TailorPromptStep } from "./TailorPromptStep";
 import { finalizeApplication, type TailorTarget } from "./tailorActions";
 import type {
   TailorPhase,
   TailorReviewDraft,
   TailorReviewFinalized,
 } from "./tailorDialogTypes";
-import { useTailorGeneration } from "./useTailorGeneration";
+import { useTailorImport } from "./useTailorImport";
 
 export interface TailorImportedInput {
   applicationId: string;
@@ -48,12 +48,12 @@ interface TailorDialogProps {
 }
 
 /**
- * The one tailoring surface: copy a prompt, paste the answer, edit it, publish.
+ * The one tailoring surface: generate, review, publish.
  *
- * It replaced a two-dialog flow whose split was an implementation detail —
- * generation lived in one dialog and editing in another, so importing a result
- * closed one modal and opened a second one over the same job. One scrolling
- * column keeps every step of the same task in the same place.
+ * Generation used to be a copy-prompt/paste-result pair of accordion steps —
+ * the user carried a prompt to a chatbot by hand and carried JSON back. The
+ * local sidecar (ADR-0024) does that round trip, so the dialog opens on a
+ * single button and the steps that remain are the ones a person still acts on.
  */
 export function TailorDialog({
   job,
@@ -107,10 +107,6 @@ function TailorDialogBody({
   const t = useTranslations("tailor.dialog");
   const td = useTranslations("tailor");
   const [target, setTarget] = useState<TailorTarget>(initialTarget);
-  const [outputs, setOutputs] = useState<Record<TailorTarget, string>>({
-    resume: "",
-    cover: "",
-  });
   // null means "derive the expanded phase from the document's state"; a value
   // is the phase the user explicitly re-opened. Every successful action clears
   // the override so the accordion advances on its own.
@@ -125,84 +121,139 @@ function TailorDialogBody({
     setPhaseOverrides((current) => ({ ...current, [forTarget]: phase }));
   }, []);
 
-  const generation = useTailorGeneration({
-    job,
-    target,
-    onCopied: (copiedTarget) => expandPhase(copiedTarget, "paste"),
-  });
-
+  const importer = useTailorImport({ job, target });
   const sidecar = useLocalTailorSidecar();
   const { toast } = useToast();
-  // The auto chain's own stage marker, separate from `generation.importing`:
-  // the manual Import button shares that flag, and the generate button must
-  // not claim its progress.
+  // The chain's own stage marker: the import hook's flag covers one call, and
+  // the button's label has to name the publish half too.
   const [autoStage, setAutoStage] = useState<"importing" | "publishing" | null>(
     null,
   );
+  // Held only when something downstream refused a generated result. Nothing
+  // else keeps it now that the paste box is gone, and silently discarding work
+  // the model already did is worse than offering it back.
+  const [rescuable, setRescuable] = useState<string | null>(null);
+  const [rescuableCopied, setRescuableCopied] = useState(false);
+
+  function handleFinalized(result: TailorReviewFinalized) {
+    setPublishedTargets((current) => ({ ...current, [result.target]: true }));
+    setPhaseOverrides((current) => ({ ...current, [result.target]: null }));
+    onFinalized(result);
+  }
+
+  // The half of the chain that runs against the server: import the JSON, then
+  // publish it. Split out because a refused import is often transient — a rate
+  // limit, a blob hiccup — and re-running the model to retry would cost another
+  // minute and another slice of the operator's quota for nothing.
+  const importAndPublish = useCallback(
+    async (generated: string) => {
+      setAutoStage("importing");
+      try {
+        const imported = await importer.importOutput(generated);
+        if (!imported) {
+          setRescuable(generated);
+          setRescuableCopied(false);
+          return;
+        }
+        setRescuable(null);
+        setPhaseOverrides((current) => ({ ...current, [target]: null }));
+        setAutoStage("publishing");
+        try {
+          const result = await finalizeApplication({
+            applicationId: imported.applicationId,
+            target,
+            expectedHash: imported.aiContentHash,
+          });
+          await onImported({
+            applicationId: imported.applicationId,
+            jobId: job.id,
+            target,
+          });
+          handleFinalized({
+            target,
+            resumePdfUrl: result.resumePdfUrl,
+            resumePdfName: result.resumePdfName,
+            coverPdfUrl: result.coverPdfUrl,
+            coverPdfName: result.coverPdfName,
+          });
+          toast({ title: t("generatePublishedToast"), duration: 2600 });
+        } catch (error) {
+          // The draft imported fine; only the render failed. It is stored and
+          // editable, so load the review step and let the user publish from
+          // there once the cause is fixed.
+          await onImported({
+            applicationId: imported.applicationId,
+            jobId: job.id,
+            target,
+          });
+          toast({
+            title: t("generatePublishFailedToast"),
+            description: getErrorMessage(error, t("errorFinalize")),
+            variant: "destructive",
+            duration: 4000,
+          });
+        }
+      } finally {
+        setAutoStage(null);
+      }
+      // handleFinalized is a hoisted declaration recreated each render; naming
+      // it here would rebuild this callback every render for no gain.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [importer, job.id, onImported, t, target, toast],
+  );
 
   // One click, one outcome: generate, import and publish as a single chain, so
-  // the button hands back a finished PDF rather than JSON to shepherd through
-  // three more steps. The server's gates stay the only judge — the chain calls
-  // the same session-authed routes the manual path does — and each stage falls
-  // back to the manual flow it replaced.
+  // the button hands back a finished PDF. The server's gates stay the only
+  // judge — the chain calls the same session-authenticated routes the dialog
+  // always called — and every stage that fails says so without losing the
+  // result it was handed.
   const generateLocally = useCallback(async () => {
-    const generated = await sidecar.generate({ jobId: job.id, target });
+    setRescuable(null);
+    setRescuableCopied(false);
+    // The locale has to be the one the import will resolve the profile with.
+    // The server picks it from the job's market; the sidecar would otherwise
+    // default to en-AU and select skills by index against the wrong bank, so a
+    // CN job could publish skills the candidate never picked.
+    const generated = await sidecar.generate({
+      jobId: job.id,
+      target,
+      locale: marketStringToResumeLocale(job.market ?? "AU"),
+    });
     if (!generated) return;
-    setAutoStage("importing");
-    try {
-      const imported = await generation.importOutput(generated);
-      if (!imported) {
-        // The server refused what the sidecar accepted (or the request never
-        // arrived). Land the JSON in the paste box next to the import error so
-        // nothing is lost and the manual path takes over.
-        setOutputs((current) => ({ ...current, [target]: generated }));
-        return;
-      }
-      // Drop the explicit "paste" expansion so the accordion derives its phase
-      // from the document again — review after a failed publish, collapsed
-      // receipts after a successful one.
-      setPhaseOverrides((current) => ({ ...current, [target]: null }));
-      setAutoStage("publishing");
-      try {
-        const result = await finalizeApplication({
-          applicationId: imported.applicationId,
-          target,
-          expectedHash: imported.aiContentHash,
-        });
-        await onImported({
-          applicationId: imported.applicationId,
-          jobId: job.id,
-          target,
-        });
-        handleFinalized({
-          target,
-          resumePdfUrl: result.resumePdfUrl,
-          resumePdfName: result.resumePdfName,
-          coverPdfUrl: result.coverPdfUrl,
-          coverPdfName: result.coverPdfName,
-        });
-        toast({ title: t("generatePublishedToast"), duration: 2600 });
-      } catch (error) {
-        // The draft imported fine; only the render failed. Load the review
-        // step so the user can publish manually once the cause is fixed.
-        await onImported({
-          applicationId: imported.applicationId,
-          jobId: job.id,
-          target,
-        });
-        toast({
-          title: t("generatePublishFailedToast"),
-          description: getErrorMessage(error, t("errorFinalize")),
-          variant: "destructive",
-          duration: 4000,
-        });
-      }
-    } finally {
-      setAutoStage(null);
-    }
-  }, [generation, handleFinalized, job.id, onImported, sidecar, t, target, toast]);
+    await importAndPublish(generated);
+  }, [importAndPublish, job.id, job.market, sidecar, target]);
 
-  const sidecarStatus =
+  const retryRescuable = useCallback(() => {
+    if (rescuable) void importAndPublish(rescuable);
+  }, [importAndPublish, rescuable]);
+
+  // The last net for a generated result, so a silent clipboard is not an
+  // option: no clipboard API (an insecure origin, some embedded webviews) or a
+  // denied permission falls back to a file the user can keep.
+  const copyRescuable = useCallback(() => {
+    if (!rescuable) return;
+    const downloadInstead = () => {
+      const url = URL.createObjectURL(
+        new Blob([rescuable], { type: "application/json" }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "joblit-generated.json";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setRescuableCopied(true);
+    };
+    if (!navigator.clipboard?.writeText) {
+      downloadInstead();
+      return;
+    }
+    void navigator.clipboard
+      .writeText(rescuable)
+      .then(() => setRescuableCopied(true), downloadInstead);
+  }, [rescuable]);
+
+  const generateStatus =
     autoStage === "importing"
       ? t("importing")
       : autoStage === "publishing"
@@ -228,17 +279,8 @@ function TailorDialogBody({
     ? "none"
     : hasContent
       ? "review"
-      : "copy";
+      : "none";
   const expandedPhase = phaseOverrides[target] ?? autoPhase;
-
-  const copyState =
-    expandedPhase === "copy"
-      ? "expanded"
-      : generation.hasCopied || hasContent
-        ? "done"
-        : "future";
-  const pasteState =
-    expandedPhase === "paste" ? "expanded" : hasContent ? "done" : "future";
 
   const indicatorFor = (
     forTarget: TailorTarget,
@@ -251,26 +293,6 @@ function TailorDialogBody({
     }
     return null;
   };
-
-  async function importCurrentOutput() {
-    const imported = await generation.importOutput(outputs[target]);
-    if (!imported) return;
-    const loaded = await onImported({
-      applicationId: imported.applicationId,
-      jobId: job.id,
-      target,
-    });
-    if (loaded) {
-      setOutputs((current) => ({ ...current, [target]: "" }));
-      setPhaseOverrides((current) => ({ ...current, [target]: null }));
-    }
-  }
-
-  function handleFinalized(result: TailorReviewFinalized) {
-    setPublishedTargets((current) => ({ ...current, [result.target]: true }));
-    setPhaseOverrides((current) => ({ ...current, [result.target]: null }));
-    onFinalized(result);
-  }
 
   return (
     <>
@@ -304,29 +326,17 @@ function TailorDialogBody({
               </p>
             ) : null}
 
-            <TailorPromptStep
-              index={1}
-              state={copyState}
-              onExpand={() => expandPhase(target, "copy")}
-              generation={generation}
-            />
-            <TailorPasteStep
-              index={2}
-              state={pasteState}
-              onExpand={() => expandPhase(target, "paste")}
+            <TailorGeneratePanel
               target={target}
-              value={outputs[target]}
-              onChange={(value) =>
-                setOutputs((current) => ({ ...current, [target]: value }))
-              }
-              importing={generation.importing}
-              importError={generation.importError}
-              onImport={() => void importCurrentOutput()}
               onGenerate={() => void generateLocally()}
               generating={sidecar.running || autoStage !== null}
-              generateStatus={sidecarStatus}
-              generateError={sidecar.error}
-              generatorOffline={sidecar.offline}
+              status={generateStatus}
+              error={sidecar.error ?? importer.importError}
+              offline={sidecar.offline}
+              rescuableOutput={rescuable}
+              onRetryOutput={retryRescuable}
+              onCopyOutput={copyRescuable}
+              outputCopied={rescuableCopied}
             />
 
             {draftLoading && !draft ? (
@@ -352,22 +362,6 @@ function TailorDialogBody({
             )}
           </div>
         </DocumentTargetTabs>
-      </div>
-
-      <div className="shrink-0 border-t border-border/60 px-6 py-3">
-        <p className="text-xs text-muted-foreground">
-          {t("skillPackHint")}{" "}
-          <button
-            type="button"
-            onClick={() => void generation.downloadSkillPack()}
-            disabled={generation.skillPackLoading}
-            className="font-medium text-brand-emerald-text underline-offset-4 transition-colors hover:underline disabled:cursor-progress disabled:opacity-60 motion-reduce:transition-none"
-          >
-            {generation.skillPackLoading
-              ? t("skillPackDownloading")
-              : t("skillPackLink")}
-          </button>
-        </p>
       </div>
     </>
   );

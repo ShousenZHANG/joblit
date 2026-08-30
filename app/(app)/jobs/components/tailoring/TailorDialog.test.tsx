@@ -21,17 +21,22 @@ const JOB_ID = "33333333-3333-4333-8333-333333333333";
 const SUMMARY =
   "Grounded platform engineer with eight years across Kubernetes, Go and TypeScript, shipping serverless data pipelines for Australian fintechs and holding full working rights.";
 
-const RESUME_PASTE = JSON.stringify({
-  cvSummary: SUMMARY,
-  skillsSelection: [{ group: 0, items: [0] }],
-});
-
 const PUBLICATION_DRAFT = {
   status: "DRAFT",
   resume: {
     status: "DRAFT",
     contentHash: "resume-content",
     publishedHash: null,
+  },
+  cover: { status: "MISSING", contentHash: null, publishedHash: null },
+};
+
+const PUBLICATION_FINAL = {
+  status: "FINAL",
+  resume: {
+    status: "FINAL",
+    contentHash: "resume-content",
+    publishedHash: "resume-content",
   },
   cover: { status: "MISSING", contentHash: null, publishedHash: null },
 };
@@ -73,7 +78,10 @@ const SNAPSHOT = {
   },
 };
 
-function job(): JobItem {
+function job(
+  applicationId: string | null = null,
+  market: string | null = null,
+): JobItem {
   return {
     id: JOB_ID,
     title: "Platform Engineer",
@@ -81,9 +89,10 @@ function job(): JobItem {
     location: "Sydney",
     jobUrl: "https://example.com/job",
     status: "NEW",
+    market,
     createdAt: "2026-08-01T00:00:00.000Z",
     updatedAt: "2026-08-01T00:00:00.000Z",
-    applicationId: null,
+    applicationId,
   } as JobItem;
 }
 
@@ -93,16 +102,6 @@ function json(data: unknown, status = 200) {
     headers: { "Content-Type": "application/json" },
   });
 }
-
-const PUBLICATION_FINAL = {
-  status: "FINAL",
-  resume: {
-    status: "FINAL",
-    contentHash: "resume-content",
-    publishedHash: "resume-content",
-  },
-  cover: { status: "MISSING", contentHash: null, publishedHash: null },
-};
 
 /**
  * Serves NDJSON the way the sidecar does: one event per line. jsdom has no
@@ -122,11 +121,27 @@ function ndjson(events: unknown[]): Response {
   return { ok: true, status: 200, body } as unknown as Response;
 }
 
-function Harness() {
+const GENERATED = [
+  { phase: "generate", attempt: 1, of: 3 },
+  { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
+];
+
+function Harness({
+  applicationId,
+  market,
+}: {
+  applicationId: string | null;
+  market: string | null;
+}) {
   const controller = useTailorReviewController();
   return (
     <>
-      <button type="button" onClick={() => controller.openTailorDialog(job(), "resume")}>
+      <button
+        type="button"
+        onClick={() =>
+          controller.openTailorDialog(job(applicationId, market), "resume")
+        }
+      >
         open
       </button>
       <TailorDialog
@@ -145,42 +160,43 @@ function Harness() {
   );
 }
 
-function renderHarness() {
+function renderHarness(
+  applicationId: string | null = null,
+  market: string | null = null,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       <QueryClientProvider client={client}>
-        <Harness />
+        <Harness applicationId={applicationId} market={market} />
       </QueryClientProvider>
     </NextIntlClientProvider>,
   );
 }
 
-function stubRoutes() {
+/**
+ * App routes only. The sidecar lives off-origin and every test that needs it
+ * layers its own stream on top, so a call to 127.0.0.1 that reaches here is a
+ * test that forgot to.
+ */
+function stubRoutes(options: { finalizeFails?: boolean; importFails?: boolean } = {}) {
   const calls: { url: string; init?: RequestInit }[] = [];
+  let finalized = false;
   const fetchMock = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input.url;
     calls.push({ url, init });
-    if (url.startsWith("/api/applications/prompt")) {
-      return json({
-        prompt: { systemPrompt: "system", userPrompt: "user" },
-        promptMeta: {
-          ruleSetId: "rules-1",
-          resumeSnapshotUpdatedAt: "2026-08-01T00:00:00.000Z",
-        },
-      });
-    }
-    if (url.startsWith("/api/prompt-rules/skill-pack")) {
-      return new Response(new Blob(["skill-pack"]), {
-        status: 200,
-        headers: {
-          "content-disposition": 'attachment; filename="joblit-skills-v3.zip"',
-        },
-      });
-    }
+
+    if (url.includes("127.0.0.1")) return ndjson(GENERATED);
+
     if (url.startsWith("/api/applications/manual-generate")) {
+      if (options.importFails) {
+        return json(
+          { error: { code: "SUMMARY_TOO_SHORT", message: "Summary too short" } },
+          422,
+        );
+      }
       return json({
         applicationId: APPLICATION_ID,
         status: "DRAFT",
@@ -196,51 +212,59 @@ function stubRoutes() {
         },
       });
     }
-    if (url.includes("/review-snapshot")) return json(SNAPSHOT);
+
     if (url.includes("/finalize")) {
+      if (options.finalizeFails) {
+        return json(
+          { error: { code: "RENDER_FAILED", message: "LaTeX render failed" } },
+          502,
+        );
+      }
+      finalized = true;
       return json({
         status: "FINAL",
-        publication: {
-          status: "FINAL",
-          resume: {
-            status: "FINAL",
-            contentHash: "resume-content",
-            publishedHash: "resume-content",
-          },
-          cover: { status: "MISSING", contentHash: null, publishedHash: null },
-        },
+        publication: PUBLICATION_FINAL,
         aiContentHash: "content-hash",
         resumePdfUrl: "https://example.com/final-cv.pdf",
         resumePdfName: "Alex CV.pdf",
       });
     }
+
+    if (url.includes("/review-snapshot")) {
+      return json(
+        finalized
+          ? {
+              ...SNAPSHOT,
+              publication: PUBLICATION_FINAL,
+              documents: {
+                resume: {
+                  pdfUrl: "https://example.com/final-cv.pdf",
+                  pdfName: "Alex CV.pdf",
+                },
+                cover: { pdfUrl: null, pdfName: "Alex CL.pdf" },
+              },
+            }
+          : SNAPSHOT,
+      );
+    }
+
     return json({ error: { code: "NOT_MOCKED", message: "not mocked" } }, 500);
   });
   vi.stubGlobal("fetch", fetchMock);
   return calls;
 }
 
-async function openPasteStep(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "open" }));
-  await user.click(
-    await screen.findByRole("button", {
-      name: messages.tailor.dialog.stepPasteTitle,
-    }),
-  );
+function generateButton() {
+  return screen.getByRole("button", {
+    name: messages.tailor.dialog.generateLocally,
+  });
 }
 
-async function openReviewStep(user: ReturnType<typeof userEvent.setup>) {
+/** Open the dialog on a job that already carries a saved draft. */
+async function openSavedDraft(user: ReturnType<typeof userEvent.setup>) {
   const calls = stubRoutes();
-  renderHarness();
-  await openPasteStep(user);
-  const textarea = await screen.findByLabelText(
-    messages.tailor.dialog.pasteLabel,
-  );
-  await user.click(textarea);
-  await user.paste(RESUME_PASTE);
-  await user.click(
-    screen.getByRole("button", { name: messages.tailor.dialog.importResult }),
-  );
+  renderHarness(APPLICATION_ID);
+  await user.click(screen.getByRole("button", { name: "open" }));
   await screen.findByText(messages.tailor.summary.title);
   return calls;
 }
@@ -256,388 +280,16 @@ describe("TailorDialog", () => {
     vi.restoreAllMocks();
   });
 
-  it("keeps Import inert until the paste parses against the current contract", async () => {
-    const user = userEvent.setup();
-    stubRoutes();
-    renderHarness();
-    await openPasteStep(user);
-
-    const importButton = await screen.findByRole("button", {
-      name: messages.tailor.dialog.importResult,
-    });
-    expect(importButton).toBeDisabled();
-
-    const textarea = await screen.findByLabelText(
-      messages.tailor.dialog.pasteLabel,
-    );
-    await user.click(textarea);
-    await user.paste('{ "cvSummary": "too short" }');
-    expect(
-      await screen.findByText(messages.tailor.dialog.parseInvalid),
-    ).toBeInTheDocument();
-    expect(importButton).toBeDisabled();
-
-    await user.clear(textarea);
-    await user.paste(RESUME_PASTE);
-    expect(
-      await screen.findByText(messages.tailor.dialog.parseValid),
-    ).toBeInTheDocument();
-    await waitFor(() => expect(importButton).toBeEnabled());
-  });
-
-  it("imports a pasted result and re-reads the snapshot to reach the review step", async () => {
-    const user = userEvent.setup();
-    const calls = await openReviewStep(user);
-
-    const imported = calls.find((call) =>
-      call.url.startsWith("/api/applications/manual-generate"),
-    );
-    expect(imported?.url).toContain("finalize=false");
-    expect(JSON.parse(String(imported?.init?.body))).toEqual(
-      expect.objectContaining({ jobId: JOB_ID, target: "resume", source: "manual_import" }),
-    );
-    // The bank only travels with the snapshot, so review is unreachable until
-    // it has been re-read.
-    expect(
-      calls.some((call) => call.url.includes("/review-snapshot")),
-    ).toBe(true);
-
-    expect(
-      screen.getByLabelText(messages.tailor.summary.aria),
-    ).toHaveValue(SUMMARY);
-    expect(
-      screen.getByRole("button", { name: "Remove TypeScript" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      screen.getByRole("button", { name: "Add Kubernetes" }),
-    ).toHaveAttribute("aria-pressed", "false");
-  });
-
-  it("renders phases beyond the current one as quiet title-only rows", async () => {
-    const user = userEvent.setup();
-    stubRoutes();
-    renderHarness();
-    await user.click(screen.getByRole("button", { name: "open" }));
-
-    const dialog = within(screen.getByRole("dialog"));
-    expect(
-      await dialog.findByRole("button", {
-        name: messages.tailor.dialog.copyPrompt,
-      }),
-    ).toBeInTheDocument();
-
-    // No bodies leak out of the collapsed phases.
-    expect(
-      dialog.queryByLabelText(messages.tailor.dialog.pasteLabel),
-    ).not.toBeInTheDocument();
-    expect(
-      dialog.queryByText(messages.tailor.dialog.stepPublishBody),
-    ).not.toBeInTheDocument();
-    expect(
-      dialog.queryByRole("button", { name: messages.tailor.dialog.finalize }),
-    ).not.toBeInTheDocument();
-
-    // Paste is reachable ahead of time; review and publish are inert until an
-    // import gives them something to act on.
-    expect(
-      dialog.getByRole("button", { name: messages.tailor.dialog.stepPasteTitle }),
-    ).toBeInTheDocument();
-    expect(
-      dialog.getByText(messages.tailor.dialog.stepReviewTitle),
-    ).toBeInTheDocument();
-    expect(
-      dialog.queryByRole("button", {
-        name: messages.tailor.dialog.stepReviewTitle,
-      }),
-    ).not.toBeInTheDocument();
-    expect(
-      dialog.getByText(messages.tailor.dialog.stepPublishTitle),
-    ).toBeInTheDocument();
-    expect(
-      dialog.queryByRole("button", {
-        name: messages.tailor.dialog.stepPublishTitle,
-      }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("collapses Paste and expands Review after a successful import", async () => {
-    const user = userEvent.setup();
-    await openReviewStep(user);
-
-    expect(
-      screen.queryByLabelText(messages.tailor.dialog.pasteLabel),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText(messages.tailor.dialog.importedSummary),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByLabelText(messages.tailor.summary.aria),
-    ).toBeInTheDocument();
-  });
-
-  it("re-expands a completed phase from its collapsed row and collapses the current one", async () => {
-    const user = userEvent.setup();
-    await openReviewStep(user);
-
-    await user.click(
-      screen.getByRole("button", {
-        name: new RegExp(messages.tailor.dialog.stepPasteTitle),
-      }),
-    );
-    expect(
-      await screen.findByLabelText(messages.tailor.dialog.pasteLabel),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByLabelText(messages.tailor.summary.aria),
-    ).not.toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: messages.tailor.dialog.stepReviewTitle }),
-    );
-    expect(
-      await screen.findByLabelText(messages.tailor.summary.aria),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByLabelText(messages.tailor.dialog.pasteLabel),
-    ).not.toBeInTheDocument();
-  });
-
-  it("copies as soon as the in-flight prompt build resolves", async () => {
-    const user = userEvent.setup();
-    let openPromptGate!: () => void;
-    const promptGate = new Promise<void>((resolve) => {
-      openPromptGate = resolve;
-    });
-    const fetchMock = vi.fn(async (input: RequestInfo) => {
-      const url = typeof input === "string" ? input : input.url;
-      if (url.startsWith("/api/applications/prompt")) {
-        await promptGate;
-        return json({
-          prompt: { systemPrompt: "system", userPrompt: "user" },
-          promptMeta: {
-            ruleSetId: "rules-1",
-            resumeSnapshotUpdatedAt: "2026-08-01T00:00:00.000Z",
-          },
-        });
-      }
-      return json({ error: { code: "NOT_MOCKED", message: "not mocked" } }, 500);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    renderHarness();
-    await user.click(screen.getByRole("button", { name: "open" }));
-
-    // Never a dead "preparing" state: the copy label is live from frame one.
-    const copyButton = screen.getByRole("button", {
-      name: messages.tailor.dialog.copyPrompt,
-    });
-    expect(copyButton).toBeEnabled();
-    await user.click(copyButton);
-    expect(
-      screen.queryByLabelText(messages.tailor.dialog.pasteLabel),
-    ).not.toBeInTheDocument();
-
-    openPromptGate();
-
-    // The copy lands once the build resolves: the copy phase collapses to its
-    // "Copied" receipt and paste opens up ready for the answer.
-    expect(
-      await screen.findByLabelText(messages.tailor.dialog.pasteLabel),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", {
-        name: new RegExp(`^${messages.tailor.dialog.stepPromptTitle}`),
-      }),
-    ).toHaveTextContent(messages.tailor.dialog.copied);
-    await expect(navigator.clipboard.readText()).resolves.toContain(
-      "SYSTEM INSTRUCTIONS START",
-    );
-  });
-
-  it("downloads the skill pack from the footer link only when clicked", async () => {
-    const user = userEvent.setup();
-    const anchorClickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
-    const createObjectUrlSpy = vi
-      .spyOn(URL, "createObjectURL")
-      .mockReturnValue("blob:skill-pack");
-    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
-    const calls = stubRoutes();
-    renderHarness();
-    await user.click(screen.getByRole("button", { name: "open" }));
-
-    expect(
-      calls.some((call) => call.url.startsWith("/api/prompt-rules/skill-pack")),
-    ).toBe(false);
-
-    await user.click(
-      screen.getByRole("button", { name: messages.tailor.dialog.skillPackLink }),
-    );
-
-    await waitFor(() => expect(anchorClickSpy).toHaveBeenCalled());
-    expect(
-      calls.some((call) =>
-        call.url.startsWith("/api/prompt-rules/skill-pack?locale=en-AU"),
-      ),
-    ).toBe(true);
-    expect(createObjectUrlSpy).toHaveBeenCalled();
-  });
-
-  it("publishes from the Publish phase and collapses it to a published receipt", async () => {
-    const user = userEvent.setup();
-    const calls = await openReviewStep(user);
-
-    expect(
-      screen.queryByText(messages.tailor.dialog.stepPublishBody),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: messages.tailor.dialog.openPdf }),
-    ).not.toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: messages.tailor.dialog.stepPublishTitle }),
-    );
-    expect(
-      await screen.findByText(messages.tailor.dialog.stepPublishBody),
-    ).toBeInTheDocument();
-
-    await user.click(
-      screen.getByRole("button", { name: messages.tailor.dialog.finalize }),
-    );
-
-    expect(
-      await screen.findByRole("link", { name: messages.tailor.dialog.openPdf }),
-    ).toHaveAttribute("href", "https://example.com/final-cv.pdf");
-    expect(
-      screen.getByText(messages.tailor.dialog.publishedSummary),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByLabelText(messages.tailor.summary.aria),
-    ).not.toBeInTheDocument();
-    expect(
-      calls.some((call) => call.url.includes("/finalize?target=resume")),
-    ).toBe(true);
-  });
-
-  it("moves a skill between the selection and the remaining bank", async () => {
-    const user = userEvent.setup();
-    await openReviewStep(user);
-
-    await user.click(screen.getByRole("button", { name: "Add Go" }));
-
-    expect(
-      await screen.findByRole("button", { name: "Remove Go" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      screen.getByText(messages.tailor.skills.resetSelection),
-    ).toBeInTheDocument();
-  });
-
-  it("keeps review and publish inert for a target with nothing generated yet", async () => {
-    const user = userEvent.setup();
-    await openReviewStep(user);
-
-    await user.click(
-      screen.getByRole("tab", { name: messages.tailor.docCover }),
-    );
-
-    const dialog = within(screen.getByRole("dialog"));
-    expect(
-      dialog.getByText(messages.tailor.dialog.stepReviewTitle),
-    ).toBeInTheDocument();
-    expect(
-      dialog.queryByRole("button", {
-        name: messages.tailor.dialog.stepReviewTitle,
-      }),
-    ).not.toBeInTheDocument();
-    expect(
-      dialog.queryByRole("button", { name: messages.tailor.dialog.finalize }),
-    ).not.toBeInTheDocument();
-  });
-
-  // The local generator is a separate process someone has to start, so a
-  // refused connection needs its own instruction rather than a raw error.
-  it("tells the user how to start the local generator when it is unreachable", async () => {
-    const user = userEvent.setup();
-    stubRoutes();
-    renderHarness();
-    await openPasteStep(user);
-
-    // stubRoutes answers app routes; the sidecar lives off-origin and is the
-    // one call that genuinely cannot connect.
-    const appFetch = globalThis.fetch as (
-      input: RequestInfo,
-      init?: RequestInit,
-    ) => Promise<Response>;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.includes("127.0.0.1")) {
-          return Promise.reject(new TypeError("Failed to fetch"));
-        }
-        return appFetch(input, init);
-      }),
-    );
-
-    await user.click(
-      screen.getByRole("button", {
-        name: messages.tailor.dialog.generateLocally,
-      }),
-    );
-
-    expect(
-      await screen.findByText(messages.tailor.dialog.generatorOffline),
-    ).toBeInTheDocument();
-  });
-
   it("one click generates, imports and publishes the PDF", async () => {
     const user = userEvent.setup();
     const calls = stubRoutes();
     renderHarness();
-    await openPasteStep(user);
+    await user.click(screen.getByRole("button", { name: "open" }));
 
-    // The sidecar streams off-origin; app routes fall through to stubRoutes.
-    // Snapshot reads that land after finalize see the published state, the way
-    // the real snapshot would.
-    const appFetch = globalThis.fetch as typeof fetch;
-    let finalized = false;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.includes("127.0.0.1")) {
-          return ndjson([
-            { phase: "generate", attempt: 1, of: 3 },
-            { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
-          ]);
-        }
-        if (url.includes("/finalize")) finalized = true;
-        if (url.includes("/review-snapshot") && finalized) {
-          return json({
-            ...SNAPSHOT,
-            publication: PUBLICATION_FINAL,
-            documents: {
-              resume: {
-                pdfUrl: "https://example.com/final-cv.pdf",
-                pdfName: "Alex CV.pdf",
-              },
-              cover: { pdfUrl: null, pdfName: "Alex CL.pdf" },
-            },
-          });
-        }
-        return appFetch(input, init);
-      }),
-    );
+    // The only action on the screen, reachable the moment the dialog opens —
+    // buried in a collapsed step, one click quietly becomes several again.
+    await user.click(generateButton());
 
-    await user.click(
-      screen.getByRole("button", {
-        name: messages.tailor.dialog.generateLocally,
-      }),
-    );
-
-    // The chain ends on the published receipt with the PDF link — no manual
-    // import or publish click in between.
     expect(
       await screen.findByRole("link", { name: messages.tailor.dialog.openPdf }),
     ).toHaveAttribute("href", "https://example.com/final-cv.pdf");
@@ -659,40 +311,38 @@ describe("TailorDialog", () => {
     });
   });
 
+  // Generation runs from a sidecar that reads the current profile, so there is
+  // no issued-prompt receipt to check the result against and none is claimed.
+  it("imports without asserting prompt provenance it does not have", async () => {
+    const user = userEvent.setup();
+    const calls = stubRoutes();
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+    await user.click(generateButton());
+    await screen.findByRole("link", { name: messages.tailor.dialog.openPdf });
+
+    const imported = calls.find((call) =>
+      call.url.startsWith("/api/applications/manual-generate"),
+    );
+    expect(imported?.url).toContain("finalize=false");
+    const body = JSON.parse(String(imported?.init?.body));
+    expect(body).toEqual(
+      expect.objectContaining({ jobId: JOB_ID, target: "resume", source: "manual_import" }),
+    );
+    expect(body).not.toHaveProperty("promptMeta");
+    expect(
+      calls.some((call) => call.url.startsWith("/api/applications/prompt")),
+    ).toBe(false);
+  });
+
   it("falls back to the review step when publishing fails after import", async () => {
     const user = userEvent.setup();
-    stubRoutes();
+    stubRoutes({ finalizeFails: true });
     renderHarness();
-    await openPasteStep(user);
+    await user.click(screen.getByRole("button", { name: "open" }));
+    await user.click(generateButton());
 
-    const appFetch = globalThis.fetch as typeof fetch;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.url;
-        if (url.includes("127.0.0.1")) {
-          return ndjson([
-            { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
-          ]);
-        }
-        if (url.includes("/finalize")) {
-          return json(
-            { error: { code: "RENDER_FAILED", message: "LaTeX render failed" } },
-            502,
-          );
-        }
-        return appFetch(input, init);
-      }),
-    );
-
-    await user.click(
-      screen.getByRole("button", {
-        name: messages.tailor.dialog.generateLocally,
-      }),
-    );
-
-    // The imported draft still lands on review, and nothing claims to be
-    // published.
+    // The imported draft is stored and editable; nothing claims to be published.
     expect(
       await screen.findByLabelText(messages.tailor.summary.aria),
     ).toHaveValue(SUMMARY);
@@ -701,45 +351,238 @@ describe("TailorDialog", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps the generated JSON in the paste box when the server refuses the import", async () => {
+  // The server resolves the resume profile from the job's market. Letting the
+  // sidecar default to en-AU would have it choose skills by index against a
+  // different bank than the one the import validates against — for a CN job
+  // that publishes skills the candidate never picked.
+  it.each([
+    ["CN", "zh-CN"],
+    ["AU", "en-AU"],
+    [null, "en-AU"],
+  ])("generates a %s job against the %s profile", async (market, locale) => {
     const user = userEvent.setup();
-    stubRoutes();
-    renderHarness();
-    await openPasteStep(user);
+    const calls = stubRoutes();
+    renderHarness(null, market);
+    await user.click(screen.getByRole("button", { name: "open" }));
+    await user.click(generateButton());
+    await screen.findByRole("link", { name: messages.tailor.dialog.openPdf });
 
-    const appFetch = globalThis.fetch as typeof fetch;
+    const generate = calls.find((call) => call.url.includes("127.0.0.1"));
+    expect(JSON.parse(String(generate?.init?.body))).toEqual(
+      expect.objectContaining({ jobId: JOB_ID, target: "resume", locale }),
+    );
+  });
+
+  // Most import refusals are transient — a rate limit, a blob hiccup. Re-running
+  // the model to clear one would cost another minute and another slice of quota.
+  it("retries a refused import without re-running the model", async () => {
+    const user = userEvent.setup();
+    let refuse = true;
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const base = (() => {
+      stubRoutes();
+      return globalThis.fetch as typeof fetch;
+    })();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo, init?: RequestInit) => {
         const url = typeof input === "string" ? input : input.url;
-        if (url.includes("127.0.0.1")) {
-          return ndjson([
-            { phase: "done", ok: true, attempts: 1, aiContent: AI_CONTENT },
-          ]);
-        }
-        if (url.startsWith("/api/applications/manual-generate")) {
+        calls.push({ url, init });
+        if (url.startsWith("/api/applications/manual-generate") && refuse) {
+          refuse = false;
           return json(
-            { error: { code: "SUMMARY_TOO_SHORT", message: "Summary too short" } },
-            422,
+            { error: { code: "RATE_LIMITED", message: "Too many requests" } },
+            429,
           );
+        }
+        return base(input, init);
+      }),
+    );
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+    await user.click(generateButton());
+    await screen.findByText(/Too many requests/);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: messages.tailor.dialog.generateRetryImport,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("link", { name: messages.tailor.dialog.openPdf }),
+    ).toBeInTheDocument();
+    // Two imports, one generation: the retry reused the result already in hand.
+    expect(
+      calls.filter((c) => c.url.startsWith("/api/applications/manual-generate")),
+    ).toHaveLength(2);
+    expect(calls.filter((c) => c.url.includes("127.0.0.1"))).toHaveLength(1);
+  });
+
+  // There is no paste box to park a refused result in any more, so the panel
+  // has to hand the work back rather than drop it.
+  it("offers the generated JSON back when the server refuses the import", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    stubRoutes({ importFails: true });
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+    await user.click(generateButton());
+
+    expect(await screen.findByText(/Summary too short/)).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", {
+        name: messages.tailor.dialog.generateCopyOutput,
+      }),
+    );
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(JSON.stringify(AI_CONTENT, null, 2)),
+    );
+  });
+
+  // The local generator is a separate process someone has to start, so a
+  // refused connection needs its own instruction rather than a raw error.
+  it("tells the user how to start the local generator when it is unreachable", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+
+    const appFetch = globalThis.fetch as typeof fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("127.0.0.1")) {
+          return Promise.reject(new TypeError("Failed to fetch"));
         }
         return appFetch(input, init);
       }),
     );
 
-    await user.click(
-      screen.getByRole("button", {
-        name: messages.tailor.dialog.generateLocally,
+    await user.click(generateButton());
+
+    expect(
+      await screen.findByText(messages.tailor.dialog.generatorOffline),
+    ).toBeInTheDocument();
+    // Nothing was generated, so there is nothing to hand back.
+    expect(
+      screen.queryByRole("button", {
+        name: messages.tailor.dialog.generateCopyOutput,
       }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lists review and publish as inert rows before anything is generated", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText(messages.tailor.dialog.stepReviewTitle)).toBeInTheDocument();
+    expect(dialog.getByText(messages.tailor.dialog.stepPublishTitle)).toBeInTheDocument();
+    // Listed, not reachable: neither expands and neither body leaks out.
+    expect(
+      dialog.queryByRole("button", { name: messages.tailor.dialog.stepReviewTitle }),
+    ).not.toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", { name: messages.tailor.dialog.stepPublishTitle }),
+    ).not.toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", { name: messages.tailor.dialog.finalize }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens a saved draft straight on the review step", async () => {
+    const user = userEvent.setup();
+    await openSavedDraft(user);
+
+    expect(screen.getByLabelText(messages.tailor.summary.aria)).toHaveValue(SUMMARY);
+    expect(
+      screen.getByRole("button", { name: "Remove TypeScript" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: "Add Kubernetes" }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("publishes a saved draft from the Publish phase", async () => {
+    const user = userEvent.setup();
+    const calls = await openSavedDraft(user);
+
+    expect(
+      screen.queryByText(messages.tailor.dialog.stepPublishBody),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: messages.tailor.dialog.stepPublishTitle }),
+    );
+    expect(
+      await screen.findByText(messages.tailor.dialog.stepPublishBody),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: messages.tailor.dialog.finalize }),
     );
 
-    // Nothing is lost: the JSON waits in the manual path next to the error.
-    const textarea = await screen.findByLabelText(
-      messages.tailor.dialog.pasteLabel,
+    expect(
+      await screen.findByRole("link", { name: messages.tailor.dialog.openPdf }),
+    ).toHaveAttribute("href", "https://example.com/final-cv.pdf");
+    expect(
+      calls.some((call) => call.url.includes("/finalize?target=resume")),
+    ).toBe(true);
+  });
+
+  it("re-expands the review phase from its collapsed row", async () => {
+    const user = userEvent.setup();
+    await openSavedDraft(user);
+
+    await user.click(
+      screen.getByRole("button", { name: messages.tailor.dialog.stepPublishTitle }),
     );
-    await waitFor(() =>
-      expect(textarea).toHaveValue(JSON.stringify(AI_CONTENT, null, 2)),
+    expect(
+      screen.queryByLabelText(messages.tailor.summary.aria),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: messages.tailor.dialog.stepReviewTitle }),
     );
-    expect(await screen.findByText(/Summary too short/)).toBeInTheDocument();
+    expect(
+      await screen.findByLabelText(messages.tailor.summary.aria),
+    ).toBeInTheDocument();
+  });
+
+  it("moves a skill between the selection and the remaining bank", async () => {
+    const user = userEvent.setup();
+    await openSavedDraft(user);
+
+    await user.click(screen.getByRole("button", { name: "Add Go" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Remove Go" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByText(messages.tailor.skills.resetSelection),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps review and publish inert for a target with nothing generated yet", async () => {
+    const user = userEvent.setup();
+    await openSavedDraft(user);
+
+    await user.click(screen.getByRole("tab", { name: messages.tailor.docCover }));
+
+    const dialog = within(screen.getByRole("dialog"));
+    // The generate button follows the tab; the phases below it stay listed.
+    expect(dialog.getByRole("button", { name: messages.tailor.dialog.generateLocally }))
+      .toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", { name: messages.tailor.dialog.stepReviewTitle }),
+    ).not.toBeInTheDocument();
+    expect(
+      dialog.queryByRole("button", { name: messages.tailor.dialog.finalize }),
+    ).not.toBeInTheDocument();
   });
 });

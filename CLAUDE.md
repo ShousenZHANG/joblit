@@ -174,13 +174,27 @@ work may already be receipt-backed; cancellation never rolls those Jobs back.
 
 ## Tailoring Workflow
 
-Generation is manual copy/paste only (ADR-0022). `POST /api/applications/prompt`
-issues the prompt for one target, the user pastes it into any chatbot, and
-`POST /api/applications/manual-generate` imports the JSON as a DRAFT;
-`PATCH /api/applications/:id/draft` autosaves review edits, and
-`POST /api/applications/:id/finalize` publishes one target to PDF. All are
-session-authenticated. The whole flow lives in one dialog
-(`app/(app)/jobs/components/tailoring/TailorDialog.tsx`) behind one menu entry.
+Generation runs on the operator's machine through the local sidecar
+(`tools/tailor/serve.mjs`, ADR-0024) and the dialog drives the whole chain from
+one button: the sidecar generates, `POST /api/applications/manual-generate`
+imports the JSON as a DRAFT, and `POST /api/applications/:id/finalize`
+publishes that target to PDF. `PATCH /api/applications/:id/draft` autosaves
+review edits. Every route is session-authenticated; the server still holds no
+model credential and calls no model (ADR-0015).
+
+The copy-prompt/paste-result UI was deleted with the one-click chain — there is
+no paste box, no prompt preview and no skill-pack download in the dialog, and
+the import sends no `promptMeta` because the sidecar builds its own prompt from
+the live profile rather than replaying an issued one. `POST
+/api/applications/prompt` still serves the skill pack and Claude Code path; it
+has no caller in the dialog. The dialog
+(`app/(app)/jobs/components/tailoring/TailorDialog.tsx`) is one button plus two
+phases, Review and Publish.
+
+The locale the sidecar generates against must be the one the import resolves
+the profile with — `marketStringToResumeLocale(job.market)`. Skills are chosen
+by index into the candidate's bank, so a mismatched locale selects against the
+wrong bank and can publish skills the candidate never picked.
 
 Finalize is the only thing that renders a PDF — there is no tailoring preview
 (ADR-0023). The local Runner, the Application Batch queue and the TailoringRun

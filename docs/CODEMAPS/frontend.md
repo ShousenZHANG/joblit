@@ -64,7 +64,7 @@ Several state machines share one closure. By responsibility:
 |---|---|
 | Selection and URL | `selectedId`, explicit-clear state, the sole workspace URL writer, and scroll-anchor capture/restore around mutations. |
 | List data | `useJobPagination`, `useJobMutations`, `useSuppressedJobRows`, keyboard navigation, and the >80-row virtualization latch. |
-| Generation | `useExternalGenerate` owns the whole manual copy/paste path — issue a prompt, paste the JSON back, persist a DRAFT. `useTailorReviewController` opens manual or saved Application content in one full-screen Review & Edit dialog. There is no unattended generation: ADR-0022 deleted the Runner, the enqueue button, the per-row tailoring badge, the progress banner and the batch details dialog. |
+| Generation | `TailorDialog` drives the whole chain from one button: the local sidecar generates (ADR-0024), `useTailorImport` persists a DRAFT, and finalize publishes the PDF. The copy-prompt/paste-result UI it replaced was deleted. `useTailorReviewController` opens generated or saved Application content in the same dialog. There is no unattended generation: ADR-0022 deleted the Runner, the enqueue button, the per-row tailoring badge, the progress banner and the batch details dialog. |
 | Surfaces | `app/(app)/jobs/components/` — `GenerateProgress`, `JobRequirementsPanel`, `JobSearchBar`, `JobDescriptionMarkdown`, `JsonInputPanel`, `StepImport`, `StepIndicator`, `VirtualJobList`, plus `ExternalGenerateDialog`, `TailorReviewDialog` and the mobile detail overlay. |
 
 Per ADR-0007, status controls read `ACTIVE_JOB_STATUS_VALUES`, while the label
@@ -81,10 +81,10 @@ map, and it projects a stored status through `toActiveJobStatus` (`:64`).
 | `useJobMutations.ts` (364) | All list writes: optimistic status patch with rollback, the 5 s undo window, a serial commit runner, session tombstones, a `pagehide` flush with `keepalive`, chunked batch delete with partial-success semantics. | `{updateStatus, requestDelete, batchDeleteMutation, updatingIds, deletingIds, error, setError}` |
 | `useSuppressedJobRows.ts` (194) | The deferred-delete suppression set and the scroll-anchor capture/restore around it, extracted from `JobsClient`. | Suppression state plus the anchor helpers. |
 | `useKeyboardNavigation.ts` (210) | j/k/Arrow/Escape row navigation with cancellable rAF focus retries for virtualized rows. | void |
-| `useExternalGenerate.ts` (359) | The whole manual copy/paste path: `POST /api/applications/prompt`, the paste dialog, `POST /api/applications/manual-generate?finalize=false`, and the entry into the Edit phase. `persistGeneratedDraft` (`:31`) is its exported import seam and `GeneratedDraftSource` is now just `"manual_import"`. | Dialog/form state plus the persist action. |
+| `useTailorImport.ts` (113) | The import half of tailoring: `POST /api/applications/manual-generate?finalize=false` and the entry into the Edit phase. `persistGeneratedDraft` is its exported seam. Sends no `promptMeta` — the sidecar builds its own prompt from the live profile, so there is no issued prompt to attest to. | `{importing, importError, clearImportError, importOutput}` |
 | `useTailorReviewController.ts` (222) | Demand-loads a tenant-checked Application review snapshot, aborts stale selections, and opens the shared full-screen editor without placing AI content in list responses. | Manual and persisted-Application open/close state plus request cancellation. |
 | `serialRunner.ts` (30) | Chains async tasks so a burst of expiring undo timers cannot fire parallel DELETEs. | — |
-| `manualGenerateDraftResponse.ts` | The Zod schema `useExternalGenerate` validates the DRAFT import response against. | — |
+| `manualGenerateDraftResponse.ts` | The Zod schema `useTailorImport` validates the DRAFT import response against; its `aiContentHash` is the CAS baseline the one-click chain finalizes with. | — |
 
 `useBatchProgress`, `useBatchCompletionSignal` and `useEnqueueJobTailoring`
 went with the queue (ADR-0022). Nothing in the workspace polls a server-side
@@ -102,8 +102,8 @@ exports. Both `jobsUrlState.ts:37` and `serializeJobListItem.ts:25` resolve
 retired statuses through `toActiveJobStatus` per ADR-0007, so the SSR-seeded
 first page and the client-fetched pages agree. Also: `visibleTotalCount.ts`,
 `tailorParser.ts`, `jobStatusPresentation.ts`, `constants.ts`, while the shared
-`jobExperienceAnalysis.ts` module owns evidence-preserving JD year analysis;
-`skillPackMeta.ts` owns skill-pack freshness.
+`jobExperienceAnalysis.ts` module owns evidence-preserving JD year analysis.
+`skillPackMeta.ts` went with the dialog's skill-pack download.
 
 ---
 

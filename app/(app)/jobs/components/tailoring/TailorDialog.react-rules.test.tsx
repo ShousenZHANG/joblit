@@ -157,9 +157,9 @@ describe("TailorDialog React rules", () => {
     await user.click(
       screen.getByRole("tab", { name: messages.tailor.docCover }),
     );
-    // Cover has nothing imported, so its accordion opens on the copy phase.
+    // Cover has nothing imported, so only the generate button is live.
     await screen.findByRole("button", {
-      name: messages.tailor.dialog.copyPrompt,
+      name: messages.tailor.dialog.generateLocally,
     });
     // The resume tab carries a draft, so its status is part of its name.
     await user.click(

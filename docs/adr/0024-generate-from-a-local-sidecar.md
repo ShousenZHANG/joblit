@@ -58,9 +58,50 @@ imported draft lands on the review step for a manual publish.
 check by a human — the gates verify groundedness, not writing. Chaining
 straight to finalize trades that reading away for speed, with the operator's
 eyes open: the review UI stays fully available afterwards (edit and re-publish
-at any time), and the manual path still stops at review. This trade is
-acceptable only because the operator is the sole user; a product default would
-keep the human read.
+at any time). This trade is acceptable only because the operator is the sole
+user; a product default would keep the human read.
+
+## Amendment: the manual path is gone
+
+This decision originally kept the copy-prompt/paste-result flow as a complete
+fallback. It no longer exists. The prompt step, the paste box and the
+skill-pack download were deleted from the dialog, which is now one button above
+the Review and Publish phases.
+
+The reasoning: a fallback nobody takes is not a safety net, it is a second
+implementation to keep correct. It also made the entry point invisible — the
+accordion opened on "copy the prompt", so the button that replaced that flow
+sat collapsed inside the step it replaced.
+
+What replaced it, deliberately narrower than a second flow:
+
+- **A refused import keeps its result.** The generated JSON is held and the
+  panel offers *Retry import* first — most refusals are transient (a rate
+  limit, a blob upload) and re-running the model costs a minute and a slice of
+  the subscription quota. *Copy the generated JSON* is the second escape, and
+  falls back to a file download where the clipboard API is unavailable.
+- **A failed render lands on Review.** The draft is stored and editable, so
+  publishing is one click once the cause is fixed.
+- **A wedged sidecar times out.** The sidecar runs the model with `spawnSync`,
+  so a hung call blocks its event loop and it answers nothing further; the
+  client gives up after five minutes rather than sitting on "Generating…"
+  forever with no manual path to fall back to.
+
+**No prompt provenance is claimed.** `promptMeta` was the receipt that a pasted
+answer came from the prompt the server had issued — a guard against a human
+pasting a stale prompt. The sidecar builds its own prompt from the profile as
+it stands at generation time, so there is no stale prompt to catch, and sending
+meta from a prompt that was never used would assert provenance the run does not
+have. The import sends none.
+
+**The generation locale is the import's locale.** The server resolves the
+resume profile from the job's market; the sidecar takes a locale parameter that
+defaulted to `en-AU`. Since skills are chosen by index into the candidate's own
+bank, a CN job generated against the en-AU profile would select against one
+bank and be stored against another — rejected if the indices fall out of range,
+and silently wrong if they do not. The dialog passes
+`marketStringToResumeLocale(job.market)` so both halves resolve the same
+profile.
 
 **Why loopback rather than the server.** Vercel cannot reach a laptop, and
 moving generation server-side would mean the server holding a model

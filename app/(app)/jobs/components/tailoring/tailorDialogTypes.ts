@@ -3,8 +3,13 @@ import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import type { MasterSkillGroup } from "@/lib/shared/tailorReviewSnapshot";
 import type { TailorTarget } from "./tailorActions";
 
-/** The four phases of the tailoring accordion, in reading order. */
-export type TailorPhase = "copy" | "paste" | "review" | "publish";
+/**
+ * The phases of the tailoring accordion, in reading order.
+ *
+ * Generation is not among them: it is one button above the accordion, not a
+ * step someone walks through (ADR-0024).
+ */
+export type TailorPhase = "review" | "publish";
 
 /**
  * Everything the dialog needs to edit one Application, loaded once when the

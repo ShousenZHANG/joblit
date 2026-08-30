@@ -120,7 +120,7 @@ export function TailorDraftSteps({
       ) : null}
 
       <TailorStep
-        index={3}
+        index={1}
         state={reviewState}
         onExpand={() => onExpandPhase("review")}
         title={t("stepReviewTitle")}
@@ -156,7 +156,7 @@ export function TailorDraftSteps({
       </TailorStep>
 
       <TailorStep
-        index={4}
+        index={2}
         state={publishState}
         onExpand={() => onExpandPhase("publish")}
         title={t("stepPublishTitle")}
