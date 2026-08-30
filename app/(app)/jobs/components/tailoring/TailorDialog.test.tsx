@@ -525,4 +525,40 @@ describe("TailorDialog", () => {
       dialog.queryByRole("button", { name: messages.tailor.dialog.finalize }),
     ).not.toBeInTheDocument();
   });
+
+  // The local generator is a separate process someone has to start, so a
+  // refused connection needs its own instruction rather than a raw error.
+  it("tells the user how to start the local generator when it is unreachable", async () => {
+    const user = userEvent.setup();
+    stubRoutes();
+    renderHarness();
+    await openPasteStep(user);
+
+    // stubRoutes answers app routes; the sidecar lives off-origin and is the
+    // one call that genuinely cannot connect.
+    const appFetch = globalThis.fetch as (
+      input: RequestInfo,
+      init?: RequestInit,
+    ) => Promise<Response>;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.url;
+        if (url.includes("127.0.0.1")) {
+          return Promise.reject(new TypeError("Failed to fetch"));
+        }
+        return appFetch(input, init);
+      }),
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: messages.tailor.dialog.generateLocally,
+      }),
+    );
+
+    expect(
+      await screen.findByText(messages.tailor.dialog.generatorOffline),
+    ).toBeInTheDocument();
+  });
 });

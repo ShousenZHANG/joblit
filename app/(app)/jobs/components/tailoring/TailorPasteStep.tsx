@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { parseTailorOutput } from "../../utils/tailorParser";
@@ -25,6 +25,16 @@ interface TailorPasteStepProps {
   importing: boolean;
   importError: string | null;
   onImport: () => void;
+  /**
+   * Fills the box from the local sidecar instead of a copy-paste round trip.
+   * Absent when there is no job to generate for, which keeps the manual path
+   * working on its own.
+   */
+  onGenerate?: () => void;
+  generating?: boolean;
+  generateStatus?: string | null;
+  generateError?: string | null;
+  generatorOffline?: boolean;
 }
 
 export function TailorPasteStep({
@@ -37,6 +47,11 @@ export function TailorPasteStep({
   importing,
   importError,
   onImport,
+  onGenerate,
+  generating = false,
+  generateStatus = null,
+  generateError = null,
+  generatorOffline = false,
 }: TailorPasteStepProps) {
   const t = useTranslations("tailor.dialog");
   const parsed = useMemo(() => parseTailorOutput(value, target), [value, target]);
@@ -52,6 +67,43 @@ export function TailorPasteStep({
       summary={t("importedSummary")}
     >
       <div className="space-y-3">
+        {onGenerate ? (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={generating || importing}
+                onClick={onGenerate}
+                className="h-9 rounded-full px-4 text-sm font-semibold"
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden />
+                    {t("generateRunning")}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" aria-hidden />
+                    {t("generateLocally")}
+                  </>
+                )}
+              </Button>
+              <p role="status" aria-live="polite" className="text-xs text-muted-foreground">
+                {generating ? generateStatus : t("generateHint")}
+              </p>
+            </div>
+            {generateError ? (
+              <p
+                role="alert"
+                className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+              >
+                {generatorOffline ? t("generatorOffline") : generateError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <Textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}

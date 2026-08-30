@@ -18,6 +18,7 @@ import {
 import { TailorDraftSteps } from "./TailorDraftSteps";
 import { TailorLockedSteps } from "./TailorLockedSteps";
 import { TailorPasteStep } from "./TailorPasteStep";
+import { useLocalTailorSidecar } from "./useLocalTailorSidecar";
 import { TailorPromptStep } from "./TailorPromptStep";
 import type { TailorTarget } from "./tailorActions";
 import type {
@@ -128,6 +129,28 @@ function TailorDialogBody({
     onCopied: (copiedTarget) => expandPhase(copiedTarget, "paste"),
   });
 
+  const sidecar = useLocalTailorSidecar();
+
+  // Fills the paste box from the local generator instead of a copy-paste round
+  // trip. The result still goes through the same import, so the server's gates
+  // remain the only judge either way.
+  const generateLocally = useCallback(async () => {
+    const generated = await sidecar.generate({ jobId: job.id, target });
+    if (generated) {
+      setOutputs((current) => ({ ...current, [target]: generated }));
+    }
+  }, [job.id, sidecar, target]);
+
+  const sidecarStatus =
+    sidecar.progress?.phase === "generate"
+      ? t("generateAttempt", {
+          attempt: sidecar.progress.attempt,
+          total: sidecar.progress.of,
+        })
+      : sidecar.progress?.phase === "rejected"
+        ? t("generateRepairing", { code: sidecar.progress.code })
+        : null;
+
   const publication = draft?.initialPublication ?? null;
   const importedFor = (forTarget: TailorTarget) =>
     publication ? publication[forTarget].status !== "MISSING" : false;
@@ -230,6 +253,11 @@ function TailorDialogBody({
               importing={generation.importing}
               importError={generation.importError}
               onImport={() => void importCurrentOutput()}
+              onGenerate={() => void generateLocally()}
+              generating={sidecar.running}
+              generateStatus={sidecarStatus}
+              generateError={sidecar.error}
+              generatorOffline={sidecar.offline}
             />
 
             {draftLoading && !draft ? (
