@@ -22,8 +22,16 @@ const REPO_ROOT = resolvePath(dirname(fileURLToPath(import.meta.url)), "..", "..
  */
 function resolveWithExtensions(baseUrl, context, nextResolve) {
   // Extensions first: a bare path that happens to be a directory must fall
-  // through to its index, not be handed to Node as a directory import.
-  for (const candidate of [`${baseUrl}.ts`, `${baseUrl}.tsx`, `${baseUrl}/index.ts`, baseUrl]) {
+  // through to its index, not be handed to Node as a directory import. Both
+  // index endings are needed — `lib/generated/prisma` is emitted JavaScript.
+  const candidates = [
+    `${baseUrl}.ts`,
+    `${baseUrl}.tsx`,
+    `${baseUrl}/index.ts`,
+    `${baseUrl}/index.js`,
+    baseUrl,
+  ];
+  for (const candidate of candidates) {
     const path = fileURLToPath(candidate);
     if (existsSync(path) && statSync(path).isFile()) {
       return nextResolve(candidate, context);
