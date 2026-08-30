@@ -11,6 +11,10 @@
  *   node --env-file=.env --experimental-loader ./tools/evals/aliasLoader.mjs \
  *     tools/tailor/serve.mjs [--port 8791]
  *
+ * On Windows, `tools/tailor/start-sidecar.cmd` runs exactly that by
+ * double-click — a browser cannot launch this process itself, so the choice is
+ * a shortcut or a typed command, not a button in the page.
+ *
  * Scope, deliberately: this is a personal tool. It runs as the operator, uses
  * the database credentials already in .env, and binds to loopback only. There
  * is no per-request auth because there is no second user — anything that

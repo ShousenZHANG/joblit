@@ -716,7 +716,7 @@
       "generateHint": "Runs on your machine with your own model, then publishes the PDF once it passes the checks.",
       "generateAttempt": "Attempt {attempt} of {total}…",
       "generateRepairing": "Rejected ({code}) — retrying…",
-      "generatorOffline": "Local generator is not running. Start it with: node --env-file=.env --experimental-loader ./tools/evals/aliasLoader.mjs tools/tailor/serve.mjs",
+      "generatorOffline": "Local generator is not running. Double-click tools/tailor/start-sidecar.cmd in the repo, then try again.",
       "stepReviewTitle": "Review",
       "stepReviewBody": "Edits save automatically.",
       "stepPublishTitle": "Publish",

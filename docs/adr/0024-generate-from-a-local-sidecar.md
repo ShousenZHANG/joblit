@@ -87,6 +87,16 @@ What replaced it, deliberately narrower than a second flow:
   client gives up after five minutes rather than sitting on "Generating…"
   forever with no manual path to fall back to.
 
+**Starting the sidecar cannot be a button in the page.** The browser has no
+API for launching a local process and should not: a page that could spawn
+`node` on the visitor's machine is a capability every other page would have
+too. So the process starts from the operating system —
+`tools/tailor/start-sidecar.cmd` runs the same command by double-click, and a
+shortcut to it in `shell:startup` makes "not running" a state that stops
+occurring. The offline message names that script rather than a command to
+type. This is the residual friction ADR-0022 identified and this decision
+never claimed to remove: a process still has to be running.
+
 **No prompt provenance is claimed.** `promptMeta` was the receipt that a pasted
 answer came from the prompt the server had issued — a guard against a human
 pasting a stale prompt. The sidecar builds its own prompt from the profile as

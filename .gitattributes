@@ -1,0 +1,6 @@
+# Windows batch files must keep CRLF endings. cmd.exe mis-parses an LF-only
+# batch file — it drops the first character or two of a line, so `setlocal`
+# runs as `tlocal` and `rem` as `m`. It fails loudly but confusingly, and it
+# depends on the cloner's core.autocrlf, so pin it here rather than hope.
+*.cmd text eol=crlf
+*.bat text eol=crlf

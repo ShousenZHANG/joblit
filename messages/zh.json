@@ -716,7 +716,7 @@
       "generateHint": "在你的电脑上用你自己的模型运行，校验通过后直接发布 PDF。",
       "generateAttempt": "第 {attempt} 次 / 共 {total} 次…",
       "generateRepairing": "被校验拒绝（{code}），正在重试…",
-      "generatorOffline": "本地生成器未启动。运行：node --env-file=.env --experimental-loader ./tools/evals/aliasLoader.mjs tools/tailor/serve.mjs",
+      "generatorOffline": "本地生成器未启动。双击仓库里的 tools/tailor/start-sidecar.cmd,然后重试。",
       "stepReviewTitle": "校对",
       "stepReviewBody": "编辑会自动保存。",
       "stepPublishTitle": "发布",
