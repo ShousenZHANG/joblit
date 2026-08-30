@@ -45,14 +45,30 @@ function hermesExecutable() {
   return "hermes";
 }
 
+/**
+ * One configuration under test. `--arms` runs several over the same cases so
+ * the comparison is paired: the same job and the same profile, differing only
+ * in the setting being compared. Comparing across separate runs would let the
+ * sample explain the difference.
+ *
+ * The subscription only serves two models through the Codex backend; everything
+ * else returns HTTP 400, so those two plus the reasoning levels are the whole
+ * space available here.
+ */
+function parseArm(spec) {
+  const [model, reasoning] = spec.split(":");
+  return { id: spec, model, reasoning: reasoning || null };
+}
+
 function parseArgs(argv) {
-  const args = { jobs: 12, target: "resume", attempts: 3, model: "gpt-5.6-sol" };
+  const args = { jobs: 12, target: "resume", attempts: 3, arms: [parseArm("gpt-5.6-sol")] };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     if (flag === "--jobs") args.jobs = Number(argv[++i]);
     else if (flag === "--target") args.target = argv[++i];
     else if (flag === "--attempts") args.attempts = Number(argv[++i]);
-    else if (flag === "--model") args.model = argv[++i];
+    else if (flag === "--model") args.arms = [parseArm(argv[++i])];
+    else if (flag === "--arms") args.arms = argv[++i].split(",").map(parseArm);
     else if (flag === "--tag") args.tag = argv[++i];
   }
   return args;
@@ -95,7 +111,7 @@ function buildPrompt(target, profile, job) {
   return `${buildV2SystemPrompt(DEFAULT_RULES)}\n\n${user}`;
 }
 
-function generate(prompt, model, slot) {
+function generate(prompt, arm, slot) {
   const usagePath = join(process.env.TEMP ?? "/tmp", `joblit-eval-${process.pid}-${slot}.json`);
   const result = spawnSync(
     hermesExecutable(),
@@ -105,7 +121,8 @@ function generate(prompt, model, slot) {
       "--ignore-rules",
       "-t", "safe",
       "--provider", "openai-codex",
-      "-m", model,
+      "-m", arm.model,
+      ...(arm.reasoning ? ["--reasoning", arm.reasoning] : []),
       "--usage-file", usagePath,
     ],
     { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
@@ -160,7 +177,7 @@ function classify(error) {
   }
 }
 
-function runCase({ profile, job, target, attempts, model, slot }) {
+function runCase({ profile, job, target, attempts, arm, slot }) {
   const basePrompt = buildPrompt(target, profile, job);
   const master = mapResumeProfile(profile);
   const trail = [];
@@ -170,7 +187,7 @@ function runCase({ profile, job, target, attempts, model, slot }) {
   let tokensOut = 0;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const { raw, usage, error: runError } = generate(prompt, model, slot);
+    const { raw, usage, error: runError } = generate(prompt, arm, slot);
     tokensIn += usage?.input_tokens ?? 0;
     tokensOut += usage?.output_tokens ?? 0;
 
@@ -252,12 +269,34 @@ function summarise(rows, args) {
   const lines = [
     `# Joblit generation eval — ${args.target}`,
     "",
-    `cases:            ${total}  (${args.jobs} jobs x ${SYNTHETIC_PROFILES.length + 1} profiles)`,
-    `model:            ${args.model}`,
+    `cases:            ${total}  (${args.jobs} jobs x ${SYNTHETIC_PROFILES.length + 1} profiles x ${args.arms.length} arm(s))`,
+    `arms:             ${args.arms.map((a) => a.id).join(", ")}`,
     `attempt cap:      ${args.attempts}`,
     "",
-    "## Headline",
+  ];
+
+  // Arms run over identical cases, so this table is a paired comparison: any
+  // difference is the setting, not the sample.
+  if (args.arms.length > 1) {
+    lines.push("## By arm", "");
+    for (const arm of args.arms) {
+      const own = rows.filter((r) => r.armId === arm.id);
+      const f = own.filter((r) => r.passed && r.attempts === 1).length;
+      const e = own.filter((r) => r.passed).length;
+      const tin = own.reduce((s, r) => s + r.tokensIn, 0);
+      const tout = own.reduce((s, r) => s + r.tokensOut, 0);
+      lines.push(
+        `  ${arm.id.padEnd(22)} first ${String(f).padStart(2)}/${own.length} ${`${((f / own.length) * 100).toFixed(1)}%`.padStart(6)}   eventual ${String(e).padStart(2)}/${own.length}   tokens ${tin}/${tout}`,
+      );
+    }
+    lines.push("");
+  }
+
+  lines.push(
+    "## Headline (all arms combined)",
     "",
+  );
+  lines.push(
     `first-pass rate:      ${firstPass}/${total}  ${pct(firstPass)}`,
     `after repair loop:    ${eventualPass}/${total}  ${pct(eventualPass)}`,
     `recovered by repair:  ${recovered}  (${((recovered / Math.max(baselineRoundTrips, 1)) * 100).toFixed(1)}% of failures)`,
@@ -267,7 +306,7 @@ function summarise(rows, args) {
     "",
     "## First rejection by gate",
     "",
-  ];
+  );
   for (const [bucket, count] of [...buckets].sort((a, b) => b[1] - a[1])) {
     lines.push(`  ${bucket.padEnd(34)} ${String(count).padStart(3)}  ${pct(count)}`);
   }
@@ -316,8 +355,9 @@ async function main() {
   ];
 
   const jobs = await sampleJobs(args.jobs);
+  const totalCases = jobs.length * profiles.length * args.arms.length;
   process.stderr.write(
-    `${jobs.length} jobs x ${profiles.length} profiles = ${jobs.length * profiles.length} cases\n`,
+    `${jobs.length} jobs x ${profiles.length} profiles x ${args.arms.length} arms = ${totalCases} cases\n`,
   );
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -328,20 +368,23 @@ async function main() {
   let done = 0;
   for (const job of jobs) {
     for (const profile of profiles) {
-      const result = runCase({ ...args, profile, job, slot: done });
-      const row = {
-        jobId: job.id,
-        company: job.company,
-        title: job.title,
-        profileId: profile.id,
-        ...result,
-      };
-      rows.push(row);
-      appendFileSync(tracePath, `${JSON.stringify(row)}\n`);
-      done += 1;
-      process.stderr.write(
-        `[${String(done).padStart(3)}/${jobs.length * profiles.length}] ${result.passed ? "PASS" : "FAIL"} a${result.attempts} ${profile.id} @ ${(job.company ?? "?").slice(0, 20)}\n`,
-      );
+      for (const arm of args.arms) {
+        const result = runCase({ ...args, arm, profile, job, slot: done });
+        const row = {
+          jobId: job.id,
+          company: job.company,
+          title: job.title,
+          profileId: profile.id,
+          armId: arm.id,
+          ...result,
+        };
+        rows.push(row);
+        appendFileSync(tracePath, `${JSON.stringify(row)}\n`);
+        done += 1;
+        process.stderr.write(
+          `[${String(done).padStart(3)}/${totalCases}] ${result.passed ? "PASS" : "FAIL"} a${result.attempts} ${arm.id.padEnd(18)} ${profile.id} @ ${(job.company ?? "?").slice(0, 18)}\n`,
+        );
+      }
     }
   }
 
