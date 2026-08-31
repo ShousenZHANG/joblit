@@ -47,6 +47,12 @@ build prompt (Joblit's own builder)
   -> accepted? hand the JSON to the browser
 ```
 
+The loop is a LangGraph state machine (`tools/tailor/tailorGraph.mjs`):
+generate and judge are nodes, and acceptance, stall, exhaustion and repair sit
+on one conditional edge, with transitions checkpointed. It began as a
+hand-written for-loop and the graph is semantically identical — the judge is
+still the deterministic gates, never a model.
+
 The browser then drives the same two session-authenticated calls a user would
 have clicked through — import, then finalize — so one click ends at the
 published PDF. The server sees exactly what it saw before; only the number of

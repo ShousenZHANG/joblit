@@ -7,10 +7,12 @@
  * stays with production's own gates, which this imports rather than
  * reimplements.
  *
- * The repair edge is the reason this is a loop at all. A rejected generation
- * used to return a 4xx and a person re-prompted by hand; the gates already
- * name the failing rule and the offending token, so that signal drives the
- * next attempt instead. Nothing in the judging path is a model.
+ * The loop itself is a LangGraph state machine (`tailorGraph.mjs`): generate
+ * and judge are nodes, and acceptance, stall, exhaustion and repair are one
+ * conditional edge. It began as a hand-written for-loop; the graph is
+ * semantically identical, with checkpointed transitions and room for a
+ * human-approval interrupt as a node rather than a rewrite. Nothing in the
+ * judging path is a model.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
@@ -28,7 +30,9 @@ import { acceptApplicationGeneration } from "@/lib/server/applications/applicati
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
 
-export const MAX_ATTEMPTS = 3;
+import { MAX_ATTEMPTS, buildTailorGraph, runTailorGraph } from "./tailorGraph.mjs";
+
+export { MAX_ATTEMPTS };
 
 /**
  * Validated by a paired four-arm comparison over 240 cases: every model the
@@ -188,11 +192,6 @@ function repairInstruction(error) {
     .join("\n");
 }
 
-/** Same failure twice running means the model cannot fix it; stop paying. */
-function hasStalled(codes) {
-  return codes.length >= 2 && codes.at(-1) === codes.at(-2);
-}
-
 /**
  * Run one job through the loop.
  *
@@ -220,57 +219,55 @@ export async function generateTailoring({
   const master = mapResumeProfile(profile);
   onProgress({ phase: "prompt", chars: basePrompt.length, job: job.title });
 
-  const codes = [];
-  const rejections = [];
-  let prompt = basePrompt;
-  let tokensIn = 0;
-  let tokensOut = 0;
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    onProgress({ phase: "generate", attempt, of: MAX_ATTEMPTS });
-    const { raw, usage } = generate(prompt, model);
-    tokensIn += usage?.input_tokens ?? 0;
-    tokensOut += usage?.output_tokens ?? 0;
-
-    const verdict = acceptApplicationGeneration({
-      target,
-      source: "manual_import",
-      rawOutput: raw,
-      promptMetaHash: "",
-      master,
-      profile,
-      job: { title: job.title, company: job.company, description: job.description },
-    });
-
-    if (verdict.ok) {
-      return {
-        ok: true,
-        job,
+  const app = buildTailorGraph({
+    generate: (prompt) => generate(prompt, model),
+    judge: (raw) =>
+      acceptApplicationGeneration({
         target,
-        attempts: attempt,
-        // The exact bytes the gate accepted. The import boundary parses the
-        // RAW model shape with the same parser this gate just ran, so this —
-        // not the derived aiContent aggregate — is what a caller must submit.
-        // Feeding the aggregate back looks plausible and fails the parse.
+        source: "manual_import",
         rawOutput: raw,
-        aiContent: verdict.aiContent,
-        coverQualityGate: verdict.coverQualityGate,
-        coverQualityIssueCount: verdict.coverQualityIssueCount,
-        rejections,
-        tokensIn,
-        tokensOut,
-      };
-    }
+        promptMetaHash: "",
+        master,
+        profile,
+        job: { title: job.title, company: job.company, description: job.description },
+      }),
+    repair: repairInstruction,
+    onProgress,
+  });
 
-    codes.push(verdict.error.code);
-    rejections.push({ attempt, code: verdict.error.code, message: verdict.error.message });
-    onProgress({ phase: "rejected", attempt, code: verdict.error.code, message: verdict.error.message });
+  const state = await runTailorGraph(app, {
+    basePrompt,
+    threadId: `${jobId}:${target}:${Date.now()}`,
+  });
 
-    if (hasStalled(codes)) {
-      return { ok: false, job, target, attempts: attempt, rejections, tokensIn, tokensOut, note: "stalled" };
-    }
-    prompt = basePrompt + repairInstruction(verdict.error);
+  if (state.outcome === "accepted") {
+    return {
+      ok: true,
+      job,
+      target,
+      attempts: state.attempt,
+      // The exact bytes the gate accepted. The import boundary parses the
+      // RAW model shape with the same parser this gate just ran, so this —
+      // not the derived aiContent aggregate — is what a caller must submit.
+      // Feeding the aggregate back looks plausible and fails the parse.
+      rawOutput: state.raw,
+      aiContent: state.verdict.aiContent,
+      coverQualityGate: state.verdict.coverQualityGate,
+      coverQualityIssueCount: state.verdict.coverQualityIssueCount,
+      rejections: state.rejections,
+      tokensIn: state.tokensIn,
+      tokensOut: state.tokensOut,
+    };
   }
 
-  return { ok: false, job, target, attempts: MAX_ATTEMPTS, rejections, tokensIn, tokensOut, note: "exhausted" };
+  return {
+    ok: false,
+    job,
+    target,
+    attempts: state.attempt,
+    rejections: state.rejections,
+    tokensIn: state.tokensIn,
+    tokensOut: state.tokensOut,
+    note: state.outcome,
+  };
 }

@@ -47,6 +47,8 @@
       "zod"
     ],
     "devDependencies": [
+      "@langchain/core",
+      "@langchain/langgraph",
       "@tailwindcss/postcss",
       "@testing-library/jest-dom",
       "@testing-library/react",
