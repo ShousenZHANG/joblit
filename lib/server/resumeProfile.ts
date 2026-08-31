@@ -81,6 +81,10 @@ type ResumeProfileInput = {
     category: string;
     items: string[];
   }[] | null;
+  certifications?: {
+    name: string;
+    url?: string | null;
+  }[] | null;
   experiences?: {
     location?: string | null;
     dates: string;
@@ -133,6 +137,7 @@ function toNormalizedWriteData(data: ResumeProfileInput) {
     basics: toJsonValue(data.basics),
     links: toJsonValue(data.links),
     skills: toJsonValue(data.skills),
+    certifications: toJsonValue(data.certifications),
     experiences: toJsonValue(data.experiences),
     projects: toJsonValue(data.projects),
     education: toJsonValue(data.education),

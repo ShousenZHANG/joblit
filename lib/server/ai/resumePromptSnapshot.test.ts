@@ -224,4 +224,50 @@ describe("buildResumePromptSnapshot", () => {
     expect(JSON.stringify(snapshot)).not.toContain("\\_");
     expect(JSON.stringify(snapshot)).not.toContain("\\#");
   });
+
+  /**
+   * Certifications render on both PDF templates but were absent from this
+   * snapshot, so a summary naming a credential the candidate holds had no
+   * evidence behind it and read to the grounding rules as a fabrication.
+   */
+  it("carries certifications so a held credential is groundable evidence", () => {
+    const snapshot = buildResumePromptSnapshot({
+      summary: "Engineer.",
+      certifications: [
+        { name: "Claude Architect", url: "https://example.com/verify/1" },
+        { name: "AWS Solutions Architect - Associate", url: null },
+        { name: null },
+      ],
+    });
+
+    // The verification URL is not evidence about the candidate's work, and
+    // every link in the prompt is one more thing pointed at an untrusted host.
+    expect(snapshot.certifications).toEqual([
+      "Claude Architect",
+      "AWS Solutions Architect - Associate",
+    ]);
+    expect(JSON.stringify(snapshot)).not.toContain("example.com");
+  });
+
+  it("bounds certifications by count and length like every other section", () => {
+    const snapshot = buildResumePromptSnapshot({
+      certifications: Array.from({ length: 12 }, (_, index) => ({
+        name: `${index}-${"c".repeat(200)}`,
+      })),
+    });
+
+    expect(snapshot.certifications).toHaveLength(
+      RESUME_PROMPT_SNAPSHOT_LIMITS.certifications.entries,
+    );
+    for (const entry of snapshot.certifications ?? []) {
+      expect(entry.length).toBeLessThanOrEqual(
+        RESUME_PROMPT_SNAPSHOT_LIMITS.certifications.name,
+      );
+    }
+  });
+
+  it("omits certifications entirely when the profile carries none", () => {
+    const snapshot = buildResumePromptSnapshot({ summary: "Engineer." });
+    expect(snapshot).not.toHaveProperty("certifications");
+  });
 });

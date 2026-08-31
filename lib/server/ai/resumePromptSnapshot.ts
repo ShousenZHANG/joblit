@@ -46,6 +46,11 @@ export const RESUME_PROMPT_SNAPSHOT_LIMITS = {
     dates: 80,
     details: 200,
   },
+  /** Matches `ResumeProfileSchema.certifications` (6 entries, 120 chars). */
+  certifications: {
+    entries: 6,
+    name: 120,
+  },
 } as const;
 
 export type ResumePromptSnapshot = {
@@ -79,6 +84,11 @@ export type ResumePromptSnapshot = {
     dates?: string;
     details?: string;
   }>;
+  /**
+   * Names only. The verification URL says nothing about the candidate's work
+   * and every link in a prompt is one more untrusted host in front of a model.
+   */
+  certifications?: string[];
 };
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -128,8 +138,8 @@ function trimToTotalLimit(snapshot: ResumePromptSnapshot): ResumePromptSnapshot 
    */
   const sectionOrder: Array<keyof Pick<
     ResumePromptSnapshot,
-    "education" | "projects" | "experiences"
-  >> = ["education", "projects", "experiences"];
+    "certifications" | "education" | "projects" | "experiences"
+  >> = ["certifications", "education", "projects", "experiences"];
 
   while (JSON.stringify(output).length > RESUME_PROMPT_SNAPSHOT_LIMITS.totalChars) {
     const section = sectionOrder.find((key) => (output[key]?.length ?? 0) > 0);
@@ -234,6 +244,18 @@ export function buildResumePromptSnapshot(profile: unknown): ResumePromptSnapsho
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
+  // Flattened to names: a certification is a claim the candidate can make, and
+  // the model needs the wording, not the credential's verification link.
+  const certifications = asArray(source.certifications)
+    .slice(0, RESUME_PROMPT_SNAPSHOT_LIMITS.certifications.entries)
+    .map((item) =>
+      boundedText(
+        asRecord(item).name,
+        RESUME_PROMPT_SNAPSHOT_LIMITS.certifications.name,
+      ),
+    )
+    .filter((item): item is string => Boolean(item));
+
   const snapshot = compactObject({
     basics,
     summary: boundedText(source.summary, RESUME_PROMPT_SNAPSHOT_LIMITS.summary),
@@ -241,6 +263,7 @@ export function buildResumePromptSnapshot(profile: unknown): ResumePromptSnapsho
     experiences: experiences.length ? experiences : undefined,
     projects: projects.length ? projects : undefined,
     education: education.length ? education : undefined,
+    certifications: certifications.length ? certifications : undefined,
   });
 
   return trimToTotalLimit(snapshot ?? {});

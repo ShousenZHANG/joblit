@@ -52,12 +52,17 @@ export function hermesExecutable() {
   return "hermes";
 }
 
+/**
+ * Every column the prompt snapshot and the LaTeX mapper read. A column missing
+ * here is invisible to generation with no error saying so.
+ */
 const PROFILE_COLUMNS = {
   locale: true,
   summary: true,
   basics: true,
   links: true,
   skills: true,
+  certifications: true,
   experiences: true,
   projects: true,
   education: true,

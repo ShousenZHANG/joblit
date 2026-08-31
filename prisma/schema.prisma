@@ -307,9 +307,14 @@ model ResumeProfile {
   basics      Json?
   links       Json?
   skills      Json?
-  experiences Json?
-  projects    Json?
-  education   Json?
+  // Named, third-party-verifiable claims with an optional URL. Its own column
+  // rather than a member of `skills`: that column is index-addressed by
+  // tailoring, so anything added to it shifts the positions a stored selection
+  // already points at.
+  certifications Json?
+  experiences    Json?
+  projects       Json?
+  education      Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

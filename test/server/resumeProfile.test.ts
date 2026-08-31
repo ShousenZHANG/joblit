@@ -249,6 +249,7 @@ describe("resumeProfile data access", () => {
         basics: undefined,
         links: undefined,
         skills: undefined,
+        certifications: undefined,
         experiences: undefined,
         projects: undefined,
         education: undefined,
@@ -261,6 +262,34 @@ describe("resumeProfile data access", () => {
     expect(applicationStore.updateMany).not.toHaveBeenCalled();
     expect(executeRawStore).not.toHaveBeenCalled();
     expect(profile?.name).toBe("Graduate CV");
+  });
+
+  /**
+   * Certifications shipped with an editor, a schema and two PDF templates, but
+   * the write normalizer never carried the field, so saving one discarded it
+   * with no error. The assertion above enumerates the whole write payload and
+   * would have caught it; this one names the field so a future trim cannot
+   * quietly drop it again.
+   */
+  it("persists certifications rather than dropping them on save", async () => {
+    resumeProfileStore.findFirst.mockResolvedValueOnce({
+      id: "rp-9",
+      userId: "user-1",
+      name: "Graduate CV",
+    });
+    resumeProfileStore.update.mockResolvedValueOnce({ id: "rp-9", userId: "user-1" });
+
+    const certifications = [
+      { name: "Claude Architect", url: "https://example.com/verify/1" },
+      { name: "AWS Solutions Architect", url: null },
+    ];
+    await upsertResumeProfile("user-1", { certifications }, { profileId: "rp-9" });
+
+    expect(resumeProfileStore.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ certifications }),
+      }),
+    );
   });
 
   it("invalidates only Resume for Resume-only profile changes across distinct jobs", async () => {
