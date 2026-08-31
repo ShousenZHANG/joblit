@@ -208,7 +208,9 @@ function renderProjects(entries: ProjectEntry[]) {
 
 function renderProjectsSection(entries: ProjectEntry[]) {
   if (entries.length === 0) return "";
-  return `\\section{Projects}\n\\vspace{0.1cm}\n\n${renderProjects(entries)}`;
+  // "\\&": the header carries a literal ampersand, which LaTeX otherwise
+  // reads as a tabular column separator.
+  return `\\section{Projects \\& Open Source}\n\\vspace{0.1cm}\n\n${renderProjects(entries)}`;
 }
 
 export function renderResumeTex(input: RenderResumeInput) {

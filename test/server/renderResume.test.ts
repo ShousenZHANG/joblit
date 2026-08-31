@@ -56,6 +56,9 @@ describe("renderResumeTex", () => {
     expect(output).toContain("\\item Delivered features");
     expect(output).toContain("Frontend");
     expect(output).toContain("React, TypeScript");
+    // The section carries owned products AND upstream contributions, and the
+    // header says so — "Projects" alone undersold the open-source half.
+    expect(output).toContain("\\section{Projects \\& Open Source}");
     expect(output).toContain("Joblit");
     expect(output).toContain("Jane Doe");
     expect(output).toContain("Example Co");
