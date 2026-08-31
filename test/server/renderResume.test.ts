@@ -173,18 +173,27 @@ describe("certifications render inside the skills block", () => {
     education: [],
   };
 
-  it("appends a Certifications line, linking credentials that carry a URL", () => {
+  it("leads the block with a Certifications line, linking credentials that carry a URL", () => {
     const output = renderResumeTex({
       ...minimal,
+      skills: [{ label: "Frontend", items: ["React"] }],
       certifications: [
         { name: "Cert A", url: "https://verify.example.com/a" },
         { name: "Cert B" },
       ],
     });
 
-    expect(output).toContain(
-      "\\textbf{Certifications:} \\href{https://verify.example.com/a}{Cert A} \\;|\\; Cert B",
+    const certLine =
+      "\\textbf{Certifications:} \\href{https://verify.example.com/a}{Cert A} \\;|\\; Cert B";
+    expect(output).toContain(certLine);
+    // Credentials lead the block: a verified certification is a stronger
+    // opening signal than any single skill row.
+    expect(output.indexOf(certLine)).toBeLessThan(
+      output.indexOf("\\textbf{Frontend:}"),
     );
+    // And the section says what it now opens with.
+    expect(output).toContain("\\section{Certifications \\& Skills}");
+    expect(output).not.toContain("\\section{Skills}");
   });
 
   it("emits no Certifications line when the list is empty or absent", () => {
@@ -192,5 +201,25 @@ describe("certifications render inside the skills block", () => {
     expect(
       renderResumeTex({ ...minimal, certifications: [] }),
     ).not.toContain("Certifications:");
+  });
+
+  // Without credentials the retitled header would advertise a line that is not
+  // there, so the title falls back.
+  it("keeps the plain Skills title when no certifications exist", () => {
+    const output = renderResumeTex({ ...minimal });
+    expect(output).toContain("\\section{Skills}");
+    expect(output).not.toContain("Certifications \\& Skills");
+  });
+
+  it("renders Education above the skills block", () => {
+    const output = renderResumeTex({
+      ...minimal,
+      education: [
+        { location: "Sydney", dates: "2023-2025", schoolDegree: "UNSW - MIT" },
+      ],
+    });
+    expect(output.indexOf("\\section{Education}")).toBeLessThan(
+      output.indexOf("\\section{Skills}"),
+    );
   });
 });

@@ -100,9 +100,17 @@ function renderSkills(
         cert.url ? `\\href{${cert.url}}{${cert.name}}` : cert.name,
       )
       .join(" \\;|\\; ");
-    lines.push(`\\textbf{Certifications:} ${items} \\\\`);
+    // Credentials lead the block: a verified certification is a stronger
+    // opening signal than any single skill row, and the retitled section
+    // promises it first.
+    lines.unshift(`\\textbf{Certifications:} ${items} \\\\`);
   }
   return lines.join("\n");
+}
+
+/** The header only advertises certifications when the line exists. */
+function skillsSectionTitle(certifications: CertificationEntry[] = []) {
+  return certifications.length > 0 ? "Certifications \\& Skills" : "Skills";
 }
 
 const renderBullets = sharedRenderBullets;
@@ -224,6 +232,7 @@ export function renderResumeTex(input: RenderResumeInput) {
   });
 
   const skillsRendered = replaceAll(skills, {
+    SKILLS_TITLE: skillsSectionTitle(input.certifications),
     SKILLS: renderSkills(input.skills, input.certifications ?? []),
   });
 
