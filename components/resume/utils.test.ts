@@ -116,5 +116,40 @@ describe("normalizeCommaItems", () => {
   it("handles items with extra whitespace", () => {
     expect(normalizeCommaItems("  a  ,  b  ")).toEqual(["a", "b"]);
   });
+
+  // A skill name may legally contain a comma inside brackets — a product with a
+  // parenthesised feature list is the common case. Splitting on those commas
+  // shattered one skill into three fragments ("Copilot Studio (Agents", "Flows",
+  // "Skills)"), which then rendered on the PDF and was offered to the model as
+  // three separately selectable skills.
+  it("keeps commas inside brackets with their skill", () => {
+    expect(normalizeCommaItems("Copilot Studio (Agents, Flows, Skills), Power Automate")).toEqual([
+      "Copilot Studio (Agents, Flows, Skills)",
+      "Power Automate",
+    ]);
+  });
+
+  it("handles square and curly brackets the same way", () => {
+    expect(normalizeCommaItems("A [x, y], B {p, q}, C")).toEqual([
+      "A [x, y]",
+      "B {p, q}",
+      "C",
+    ]);
+  });
+
+  it("splits normally once a bracket closes", () => {
+    expect(normalizeCommaItems("A (x, y), B, C (z)")).toEqual(["A (x, y)", "B", "C (z)"]);
+  });
+
+  // Unbalanced input is a half-typed entry, not a reason to lose the rest of
+  // the line: keep the tail as one item rather than dropping it.
+  it("does not lose text after an unclosed bracket", () => {
+    expect(normalizeCommaItems("A, B (x, y")).toEqual(["A", "B (x, y"]);
+  });
+
+  it("round-trips what the editor joins back together", () => {
+    const items = ["Copilot Studio (Agents, Flows, Skills)", "Dataverse"];
+    expect(normalizeCommaItems(items.join(", "))).toEqual(items);
+  });
 });
 
