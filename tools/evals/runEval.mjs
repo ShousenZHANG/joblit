@@ -12,7 +12,11 @@
  *
  *   node --env-file=.env --experimental-loader ./tools/evals/aliasLoader.mjs \
  *     tools/evals/runEval.mjs --user <account email> \
- *     [--jobs 12] [--target resume] [--attempts 3]
+ *     [--jobs 12] [--target resume] [--attempts 3] [--dry-run]
+ *
+ * `--dry-run` builds every prompt and reports what they weigh, section by
+ * section, without calling a model or writing a trace. That is the half of a
+ * prompt-slimming question that costs nothing to answer.
  *
  * `--user` is required. This reads production tables and joblit.tech is open
  * self-serve signup, so an unscoped query returns whichever tenant saved
@@ -39,6 +43,7 @@ import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplat
 import { buildPrompt, readActiveProfile } from "../tailor/generateTailoring.mjs";
 
 import { SYNTHETIC_PROFILES } from "./profiles.mjs";
+import { promptSections, summarisePromptSizes } from "./promptSize.mjs";
 import { skillsBreadth, summariseBreadth } from "./skillsBreadth.mjs";
 
 const OUT_DIR = join(process.cwd(), "tools", "evals", "results");
@@ -79,6 +84,7 @@ function parseArgs(argv) {
     else if (flag === "--arms") args.arms = argv[++i].split(",").map(parseArm);
     else if (flag === "--tag") args.tag = argv[++i];
     else if (flag === "--user") args.user = argv[++i];
+    else if (flag === "--dry-run") args.dryRun = true;
   }
   return args;
 }
@@ -369,6 +375,49 @@ function summarise(rows, args) {
 const EVAL_LOCALE = "en-AU";
 
 /**
+ * What the prompts weigh, over the same matrix a real run would score.
+ *
+ * A prompt cut has two questions: how much does it save, and does it break
+ * anything. This answers the first for free — no model call, no trace file, no
+ * subscription quota — so only the cuts worth testing get tested.
+ */
+function dryRunReport(jobs, profiles, target, { rules, locale }) {
+  const cases = [];
+  for (const job of jobs) {
+    for (const profile of profiles) {
+      const prompt = buildPrompt(target, profile, job, { rules, locale });
+      cases.push({ total: prompt.length, sections: promptSections(prompt) });
+    }
+  }
+
+  const summary = summarisePromptSizes(cases);
+  if (!summary) return "no cases to measure\n";
+
+  const lines = [
+    `# Prompt size — ${target}  (dry run, no model called)`,
+    "",
+    `cases:      ${summary.cases}  (${jobs.length} jobs x ${profiles.length} profiles)`,
+    `mean total: ${Math.round(summary.meanTotal)} chars  (~${Math.round(summary.meanTotal / 3.7)} tokens)`,
+    `range:      ${summary.minTotal} - ${summary.maxTotal} chars`,
+    "",
+    "## Mean size by section",
+    "",
+  ];
+  for (const section of summary.sections) {
+    lines.push(
+      `  ${section.tag.padEnd(24)} ${String(Math.round(section.meanChars)).padStart(6)}  ${`${(section.meanShare * 100).toFixed(1)}%`.padStart(6)}`,
+    );
+  }
+  const tagged = summary.sections.reduce((sum, s) => sum + s.meanChars, 0);
+  lines.push(
+    "",
+    `  ${"(system prompt + glue)".padEnd(24)} ${String(Math.round(summary.meanTotal - tagged)).padStart(6)}`,
+    "",
+  );
+  return lines.join("\n");
+}
+
+/**
  * Resolve the one tenant this run is allowed to read.
  *
  * Required, with no fallback. Every query below reaches a shared production
@@ -408,6 +457,14 @@ async function main() {
   ];
 
   const jobs = await sampleJobs(args.jobs, userId);
+
+  if (args.dryRun) {
+    process.stdout.write(
+      dryRunReport(jobs, profiles, args.target, { rules, locale: EVAL_LOCALE }),
+    );
+    return;
+  }
+
   const totalCases = jobs.length * profiles.length * args.arms.length;
   process.stderr.write(
     `${jobs.length} jobs x ${profiles.length} profiles x ${args.arms.length} arms = ${totalCases} cases\n`,

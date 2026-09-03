@@ -50,6 +50,44 @@ describe("prompt rule template contract filtering", () => {
     ).toEqual(DEFAULT_CV_RULES);
   });
 
+  /**
+   * The retired vocabulary is not only field names. This rule is a real
+   * stored template from before ADR-0023: it names no deleted field, so every
+   * existing pattern let it through, and it instructs the exact two behaviours
+   * that decision removed — writing new skill strings, and refusing to drop
+   * any. It reached the prompt alongside "drop the groups and the items this
+   * posting does not care about" and won often enough that tailored resumes
+   * were shipping 22 of 26 master skills.
+   */
+  it("removes stored rules that forbid dropping skills, which is what selection is", () => {
+    expect(
+      sanitizePromptCvRules([
+        "Skills must cover all JD-required skills by only adding missing ones to the existing skills list (no removals, no fabrication).",
+        "Prefer concrete, ATS-safe phrasing; avoid hype or vague adjectives.",
+      ]),
+    ).toEqual(["Prefer concrete, ATS-safe phrasing; avoid hype or vague adjectives."]);
+  });
+
+  it("removes a no-removals instruction however it is phrased", () => {
+    expect(
+      sanitizePromptCvRules([
+        "Do not remove any existing skills.",
+        "Never remove a skill group from the master list.",
+        "Keep all skills; no removals.",
+        "Order skillsSelection by relevance to the posting.",
+      ]),
+    ).toEqual(["Order skillsSelection by relevance to the posting."]);
+  });
+
+  it("keeps rules that ask for the dropping the contract requires", () => {
+    const keep = [
+      "Drop the groups and items this posting does not care about.",
+      "Do not add claims beyond the Master Resume Profile.",
+    ];
+
+    expect(sanitizePromptCvRules(keep)).toEqual(keep);
+  });
+
   it("removes retired cover fields without dropping paragraph guidance", () => {
     expect(
       sanitizePromptCoverRules([

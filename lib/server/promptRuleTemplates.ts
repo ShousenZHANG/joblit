@@ -42,6 +42,16 @@ const RETIRED_CV_OUTPUT_RULE_PATTERNS = [
   /\bfull ordered output\b/i,
   /\boutput comments?\b/i,
   /\bstill include\b.*\bverbatim\b/i,
+  // The retired vocabulary is not only field names. Selection means dropping:
+  // the model returns index references into the candidate's own bank and the
+  // whole point is that the groups and items a posting does not reward come
+  // out (ADR-0023). A stored rule that forbids removals, or that asks for
+  // missing skills to be added to the list, instructs the `skillsAdditions`
+  // behaviour without ever naming it — it passed every pattern above while
+  // telling the model the opposite of the contract it is being scored on.
+  /\bno removals?\b/i,
+  /\b(?:do not|don't|never)\s+remove\b/i,
+  /\badd(?:ing)?\s+(?:the\s+)?missing\s+(?:ones|skills?)\b/i,
 ] as const;
 
 const RETIRED_COVER_OUTPUT_RULE_PATTERNS = [
