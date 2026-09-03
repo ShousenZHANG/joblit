@@ -155,9 +155,10 @@ has to be running.
 
 So the honest scope is that this is a personal tool. It is not a product
 feature, and it will not be one until generation can happen without asking
-someone to start a process. The manual path stays the default and stays
-complete: the button fills the same textarea, and with the sidecar stopped
-the dialog says so and the paste flow works exactly as before.
+someone to start a process. This paragraph used to end by calling the manual
+paste flow the default and a complete fallback; the amendment above deleted
+that flow, so what remains when the sidecar is stopped is a dialog that says
+so and names the script to start — not a second way to generate.
 
 ## Consequences
 

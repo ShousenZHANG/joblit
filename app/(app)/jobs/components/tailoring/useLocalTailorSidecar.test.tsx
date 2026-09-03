@@ -131,16 +131,37 @@ describe("useLocalTailorSidecar", () => {
     expect(result.current.running).toBe(false);
   });
 
-  it("clears state on reset so a retry does not show the old failure", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+  /**
+   * There used to be a `reset()` here that this test called. Nothing in the
+   * app ever did — the retry path is a second `generate`, which clears the
+   * previous failure itself, and the hook unmounts with the dialog. Asserting
+   * on the real retry keeps the guarantee and drops the dead API.
+   */
+  it("clears the previous failure when a retry starts, not only when it succeeds", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockImplementationOnce(
+        () =>
+          new Promise(() => {
+            // Never settles: the assertion is about the state a retry sets on
+            // its way out, while it is still in flight.
+          }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => useLocalTailorSidecar());
     await act(async () => {
       await result.current.generate({ jobId: "job-1", target: "resume" });
     });
     expect(result.current.error).not.toBeNull();
+    expect(result.current.offline).toBe(true);
 
-    act(() => result.current.reset());
+    act(() => {
+      void result.current.generate({ jobId: "job-1", target: "resume" });
+    });
+
+    await waitFor(() => expect(result.current.running).toBe(true));
     expect(result.current.error).toBeNull();
     expect(result.current.offline).toBe(false);
   });

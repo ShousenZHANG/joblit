@@ -42,7 +42,6 @@ export interface LocalTailorSidecar {
   /** True when the last failure was the sidecar being unreachable. */
   offline: boolean;
   generate: (input: { jobId: string; target: "resume" | "cover"; locale?: string }) => Promise<string | null>;
-  reset: () => void;
 }
 
 function sidecarOrigin(): string {
@@ -56,15 +55,6 @@ export function useLocalTailorSidecar(): LocalTailorSidecar {
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
-
-  const reset = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setRunning(false);
-    setProgress(null);
-    setError(null);
-    setOffline(false);
-  }, []);
 
   const generate = useCallback<LocalTailorSidecar["generate"]>(
     async ({ jobId, target, locale }) => {
@@ -174,5 +164,5 @@ export function useLocalTailorSidecar(): LocalTailorSidecar {
   // unmounted tree.
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  return { running, progress, error, offline, generate, reset };
+  return { running, progress, error, offline, generate };
 }
