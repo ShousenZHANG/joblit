@@ -11,7 +11,13 @@
  * self-scoring. Nothing here asks a model to judge a model.
  *
  *   node --env-file=.env --experimental-loader ./tools/evals/aliasLoader.mjs \
- *     tools/evals/runEval.mjs [--jobs 12] [--target resume] [--attempts 3]
+ *     tools/evals/runEval.mjs --user <account email> \
+ *     [--jobs 12] [--target resume] [--attempts 3]
+ *
+ * `--user` is required. This reads production tables and joblit.tech is open
+ * self-serve signup, so an unscoped query returns whichever tenant saved
+ * something most recently — and whatever it returns is put in a prompt, sent
+ * to the model provider, and written to a trace file on this disk.
  *
  * Writes a JSONL trace next to a summary table so a regression can be traced
  * to the case that caused it.
@@ -21,17 +27,19 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileS
 import { join } from "node:path";
 
 import { prisma } from "@/lib/server/prisma";
-import {
-  buildV2SystemPrompt,
-  buildV2ResumeUserPrompt,
-  buildV2CoverUserPrompt,
-} from "@/lib/server/ai/applicationPromptBuilder";
 import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot";
-import { DEFAULT_RULES } from "@/lib/server/ai/promptSkills";
 import { acceptApplicationGeneration } from "@/lib/server/applications/applicationGeneration";
 import { mapResumeProfile } from "@/lib/server/latex/mapResumeProfile";
+import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
+
+// The prompt under test must be the prompt production sends. This used to be a
+// second `buildPrompt` living here, and it had drifted: no coverage analysis,
+// no locale, and `DEFAULT_RULES` where the sidecar uses the user's active
+// template. A pass rate measured on a prompt nothing ships is not a measurement.
+import { buildPrompt, readActiveProfile } from "../tailor/generateTailoring.mjs";
 
 import { SYNTHETIC_PROFILES } from "./profiles.mjs";
+import { skillsBreadth, summariseBreadth } from "./skillsBreadth.mjs";
 
 const OUT_DIR = join(process.cwd(), "tools", "evals", "results");
 
@@ -70,6 +78,7 @@ function parseArgs(argv) {
     else if (flag === "--model") args.arms = [parseArm(argv[++i])];
     else if (flag === "--arms") args.arms = argv[++i].split(",").map(parseArm);
     else if (flag === "--tag") args.tag = argv[++i];
+    else if (flag === "--user") args.user = argv[++i];
   }
   return args;
 }
@@ -79,10 +88,15 @@ function parseArgs(argv) {
  *
  * A fetch run lands many roles from one employer at once, so an unspread
  * sample measures one company's phrasing and reports it as a pass rate.
+ *
+ * Scoped to one user. joblit.tech is open self-serve signup, so `Job` holds
+ * more than one tenant's rows and an unfiltered sample would put a stranger's
+ * saved postings into a prompt, send them to the model provider under the
+ * operator's subscription, and write them to a trace file on this disk.
  */
-async function sampleJobs(limit) {
+async function sampleJobs(limit, userId) {
   const pool = await prisma.job.findMany({
-    where: { description: { not: null } },
+    where: { userId, description: { not: null } },
     select: { id: true, title: true, company: true, description: true },
     orderBy: { createdAt: "desc" },
     take: limit * 12,
@@ -97,18 +111,6 @@ async function sampleJobs(limit) {
     if (picked.length === limit) break;
   }
   return picked;
-}
-
-function buildPrompt(target, profile, job) {
-  const input = {
-    target,
-    rules: DEFAULT_RULES,
-    candidate: buildResumePromptSnapshot(profile),
-    job: { title: job.title, company: job.company, description: job.description },
-  };
-  const user =
-    target === "resume" ? buildV2ResumeUserPrompt(input) : buildV2CoverUserPrompt(input);
-  return `${buildV2SystemPrompt(DEFAULT_RULES)}\n\n${user}`;
 }
 
 function generate(prompt, arm, slot) {
@@ -177,9 +179,13 @@ function classify(error) {
   }
 }
 
-function runCase({ profile, job, target, attempts, arm, slot }) {
-  const basePrompt = buildPrompt(target, profile, job);
+function runCase({ profile, job, target, attempts, arm, slot, rules, locale }) {
+  const basePrompt = buildPrompt(target, profile, job, { rules, locale });
   const master = mapResumeProfile(profile);
+  // The bank the model was shown, not the raw profile: selection indexes are
+  // positions in the snapshot, so a ratio taken against anything else would be
+  // measuring a different denominator than the model was choosing from.
+  const bank = buildResumePromptSnapshot(profile).skills ?? [];
   const trail = [];
   const rejections = [];
   let prompt = basePrompt;
@@ -221,6 +227,14 @@ function runCase({ profile, job, target, attempts, arm, slot }) {
         // soft verdict so the run can report on the half the gates don't block.
         softFail: verdict.coverQualityGate === "soft-fail",
         qualityIssues: verdict.coverQualityIssueCount,
+        // How much of the candidate's own skill bank survived tailoring. The
+        // gates cannot report on this: every index inside the bank is legal,
+        // so a selection that drops nothing scores exactly like one that
+        // drops half.
+        breadth: skillsBreadth(
+          verdict.aiContent?.cv?.skillsSelection?.aiSelection,
+          bank,
+        ),
       };
     }
 
@@ -316,6 +330,21 @@ function summarise(rows, args) {
       `  ${id.padEnd(18)} first ${String(e.first).padStart(2)}/${e.n}   eventual ${String(e.pass).padStart(2)}/${e.n}`,
     );
   }
+  // The second half of what tailoring produces (ADR-0023). No gate scores it,
+  // so without this section a run reports a pass rate for the summary and
+  // stays silent about whether the skills section was tailored at all.
+  const breadth = summariseBreadth(rows);
+  if (breadth) {
+    lines.push(
+      "",
+      "## Skills selection breadth (no gate scores this)",
+      "",
+      `  measured on:    ${breadth.measured}/${total} accepted cases`,
+      `  mean selected:  ${breadth.meanItems.toFixed(1)} of ${breadth.meanBankItems.toFixed(1)} bank items  (${(breadth.meanRatio * 100).toFixed(1)}%)`,
+      `  kept the whole bank: ${breadth.fullBank}/${breadth.measured}  ${((breadth.fullBank / breadth.measured) * 100).toFixed(1)}%`,
+    );
+  }
+
   // Only meaningful on the cover path, where the quality check advises rather
   // than blocks. Without this line a cover run reports 100% and says nothing.
   const accepted = rows.filter((r) => r.passed);
@@ -337,24 +366,48 @@ function summarise(rows, args) {
   return lines.join("\n");
 }
 
+const EVAL_LOCALE = "en-AU";
+
+/**
+ * Resolve the one tenant this run is allowed to read.
+ *
+ * Required, with no fallback. Every query below reaches a shared production
+ * table, and the convenient default — newest row wins — silently selects
+ * whichever user happened to save something last.
+ */
+async function resolveUserId(email) {
+  if (!email) {
+    process.stderr.write(
+      "usage: runEval.mjs --user <account email> [--jobs 12] [--target resume]\n" +
+        "  --user is required: this reads production tables that hold every signed-up user's rows.\n",
+    );
+    process.exit(2);
+  }
+  const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (!user) {
+    process.stderr.write(`no user with email ${email}\n`);
+    process.exit(2);
+  }
+  return user.id;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const operator = await prisma.resumeProfile.findFirst({
-    where: { locale: "en-AU" },
-    orderBy: { updatedAt: "desc" },
-    select: {
-      locale: true, summary: true, basics: true, links: true,
-      skills: true, experiences: true, projects: true, education: true,
-    },
-  });
+  const userId = await resolveUserId(args.user);
+
+  // The same reader the sidecar uses: the ActiveResumeProfile pointer first,
+  // the newest profile for THIS user as the fallback, and every column the
+  // prompt snapshot reads (the old select here was missing certifications).
+  const operator = await readActiveProfile(userId, EVAL_LOCALE).catch(() => null);
+  const rules = await getActivePromptSkillRulesForUser(userId);
   const profiles = [
     ...(operator ? [{ id: "operator-real", ...operator }] : []),
     ...SYNTHETIC_PROFILES,
   ];
 
-  const jobs = await sampleJobs(args.jobs);
+  const jobs = await sampleJobs(args.jobs, userId);
   const totalCases = jobs.length * profiles.length * args.arms.length;
   process.stderr.write(
     `${jobs.length} jobs x ${profiles.length} profiles x ${args.arms.length} arms = ${totalCases} cases\n`,
@@ -369,7 +422,15 @@ async function main() {
   for (const job of jobs) {
     for (const profile of profiles) {
       for (const arm of args.arms) {
-        const result = runCase({ ...args, arm, profile, job, slot: done });
+        const result = runCase({
+          ...args,
+          arm,
+          profile,
+          job,
+          slot: done,
+          rules,
+          locale: EVAL_LOCALE,
+        });
         const row = {
           jobId: job.id,
           company: job.company,
