@@ -141,7 +141,7 @@ function buildSummaryRulesBlock(job: JobInput): string {
     "3) Every number must already appear in <candidate-evidence>. A summary restates the candidate's record; it does not discover new figures.",
     "4) Every skill or technology named must already appear in <candidate-evidence>. A tool the profile does not carry is a fabrication, not a stretch.",
     "5) Claim no seniority the candidate's own titles and dates cannot support. You may claim the role; you may not promote them into it.",
-    "6) Bold JD-critical keywords with clean **keyword** markers (no spaces inside the markers), and only keywords the profile supports.",
+    "6) Bold 2-3 JD-critical keywords with clean **keyword** markers (no spaces inside the markers), and only keywords the profile supports.",
   ].join("\n");
 }
 
@@ -197,15 +197,31 @@ function buildCoverStructureBlock() {
   ].join("\n");
 }
 
-// Shared writing-quality rules applied to both resume and cover.
-function buildWritingQualityBlock() {
-  return [
-    "Writing quality (must follow):",
+/**
+ * Writing-quality rules, minus the ones that do not belong to the target.
+ *
+ * This block used to be byte-identical in both prompts, and two of its five
+ * rules are cover-shaped. One of them actively contradicted the resume prompt:
+ * "First person, active voice" landed in the same request as summary-craft's
+ * "No first-person pronouns", and a resume summary is written in the third
+ * person. The other guards claims about the employer, which only a cover letter
+ * makes. Both stay for the cover, where they are correct.
+ */
+function buildWritingQualityBlock(target: PromptTarget) {
+  const shared = [
     "1) No em-dashes (— or --). Use commas, periods, or restructure the sentence instead.",
     "2) No cliches or filler phrases. Ban: 'passionate about', 'great fit', 'leverage my skills', 'hit the ground running', 'drive results', 'synergies', 'team player', 'results-oriented', 'think outside the box'. Replace every claim with a specific, evidence-backed example.",
-    "3) No unverified company-specific claims (partnerships, product names, technology, funding, expansions). If a claim is not supported by the job evidence, phrase it generally or omit it. Do not invent company facts.",
-    "4) Interview backtrack test: only reframe experience the candidate could defend without backtracking. Emphasize relevant evidence and use natural target-domain synonyms, but never claim experience or domain exposure the candidate does not have.",
+    "3) Interview backtrack test: only reframe experience the candidate could defend without backtracking. Emphasize relevant evidence and use natural target-domain synonyms, but never claim experience or domain exposure the candidate does not have.",
+  ];
+  const coverOnly = [
+    "4) No unverified company-specific claims (partnerships, product names, technology, funding, expansions). If a claim is not supported by the job evidence, phrase it generally or omit it. Do not invent company facts.",
     "5) Demonstrate, don't state: replace 'I am X' with a concrete example that shows X and its outcome. First person, active voice.",
+  ];
+
+  return [
+    "Writing quality (must follow):",
+    ...shared,
+    ...(target === "cover" ? coverOnly : []),
   ].join("\n");
 }
 
@@ -387,7 +403,7 @@ export function buildV2ResumeUserPrompt(input: BuildApplicationPromptInput): str
     "</skills-selection-rules>",
     "",
     "<writing-quality>",
-    buildWritingQualityBlock(),
+    buildWritingQualityBlock("resume"),
     "</writing-quality>",
     "",
     "<output-schema>",
@@ -452,7 +468,7 @@ export function buildV2CoverUserPrompt(
     "</cover-structure>",
     "",
     "<writing-quality>",
-    buildWritingQualityBlock(),
+    buildWritingQualityBlock("cover"),
     "</writing-quality>",
     "",
     "<output-schema>",

@@ -108,7 +108,7 @@ export const STRUCTURED_CV_RULES: SkillRuleDef[] = [
     priority: "high",
     appliesTo: ["resume"],
     text:
-      "Bold 3-5 JD-aligned technical keywords in cvSummary using clean markdown **keyword** markers. Avoid over-bolding.",
+      "Bold 2-3 JD-aligned technical keywords in cvSummary using clean markdown **keyword** markers. Avoid over-bolding.",
   },
   {
     id: "cv.structure.01",

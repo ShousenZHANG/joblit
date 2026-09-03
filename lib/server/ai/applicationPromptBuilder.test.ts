@@ -272,7 +272,54 @@ describe("writing-quality rules (full prompt path)", () => {
     expect(prompt).toContain("No em-dashes");
     expect(prompt.toLowerCase()).toContain("passionate about");
     expect(prompt.toLowerCase()).toContain("interview backtrack test");
+  });
+
+  /**
+   * The block used to be byte-identical in both prompts, which put "First
+   * person, active voice" into the same prompt as summary-craft's "No
+   * first-person pronouns". A model cannot satisfy both, and the resume
+   * summary is the one that is written in the third person.
+   */
+  it("does not ask the resume summary for first person, which summary-craft forbids", () => {
+    const prompt = buildV2ResumeUserPrompt(resumeInput);
+
+    expect(prompt).toContain("No first-person pronouns");
+    expect(prompt.toLowerCase()).not.toContain("first person, active voice");
+  });
+
+  it("still asks the cover letter for first person, where it is the right voice", () => {
+    const prompt = buildV2CoverUserPrompt(coverInput);
+
+    expect(prompt.toLowerCase()).toContain("first person, active voice");
     expect(prompt.toLowerCase()).toContain("no unverified company-specific claims");
+  });
+
+  /**
+   * A resume summary states the candidate's own record. The company-claims
+   * rule guards a paragraph that talks about the employer, which only the
+   * cover letter has.
+   */
+  it("keeps the company-claims rule out of the resume prompt", () => {
+    expect(buildV2ResumeUserPrompt(resumeInput).toLowerCase()).not.toContain(
+      "no unverified company-specific claims",
+    );
+  });
+
+  /**
+   * The count was stated three times in three files and disagreed every time:
+   * "Bold 3-5" in the rules, "two or three" in summary-craft, "at least one"
+   * in the self-check. Nothing enforces it — `summaryLint` does not look at
+   * bold markers at all — so the only cost of disagreeing was a model choosing
+   * which instruction to believe.
+   */
+  it("asks for one bold-keyword count in the resume prompt, not three that disagree", () => {
+    const prompt = buildV2ResumeUserPrompt(resumeInput);
+
+    expect(prompt).not.toContain("Bold 3-5");
+    expect(prompt).not.toContain("at least one clean");
+    expect(prompt).toContain("Bold 2-3 JD-aligned technical keywords");
+    expect(prompt).toContain("Bold 2-3 JD-critical keywords");
+    expect(prompt).toContain("2-3 clean **keyword** bold markers");
   });
 
   it("strengthens the cover structure with a headline formula and forward-looking framing", () => {

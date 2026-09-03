@@ -9,6 +9,11 @@ import { CV_SUMMARY_LENGTH } from "@/lib/shared/schemas/applicationGenerationOut
  * lint in `lib/server/ai/summaryLint.ts` and the index-bounds check in
  * `lib/server/applications/manualImportParser.ts` — so a model that passes its
  * own self-check is not about to be rejected by the server.
+ *
+ * One exception, marked in place: BOLD_MARKERS has no server counterpart.
+ * Nothing counts bold markers on a resume summary, so it is craft advice
+ * wearing a gate's clothes, and it says so rather than implying a rejection
+ * that cannot happen.
  */
 export function buildEmbeddedResumeQualityGates(): string {
   return [
@@ -36,7 +41,7 @@ export function buildEmbeddedResumeQualityGates(): string {
     "",
     "10. **SELECTION_NON_EMPTY**: At least one group with at least one item is returned.",
     "",
-    "11. **BOLD_MARKERS**: `cvSummary` contains at least one clean **keyword** bold marker for a JD-critical term. Markers must be clean: `**keyword**` with no inner spaces and no nested markers.",
+    "11. **BOLD_MARKERS**: `cvSummary` contains 2-3 clean **keyword** bold markers for JD-critical terms. Markers must be clean: `**keyword**` with no inner spaces and no nested markers. Nothing on the server counts them, so this one is craft rather than compliance.",
     "",
     "12. **JSON_VALID**: Output is strict JSON matching the required schema. No code fences (` ``` `), no markdown prose outside JSON string values, no trailing commas, no comments. Use `\\n` for line breaks within string values.",
   ].join("\n");

@@ -90,7 +90,7 @@ describe("default prompt rules", () => {
       "Markdown bold markers inside JSON string values are allowed when requested.",
     );
     expect(text).toContain(
-      "Bold JD-critical keywords with clean **keyword** markers",
+      "Bold 2-3 JD-critical keywords with clean **keyword** markers",
     );
   });
 
