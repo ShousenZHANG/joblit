@@ -53,12 +53,11 @@ describe("listJobsWithRelevance", () => {
       .mockResolvedValueOnce([{ count: BigInt(0) }]);
   });
 
-  it("applies state aliases and ranked cursor pagination", async () => {
+  it("ranks by relevance and pages from the ranked cursor", async () => {
     await listJobsWithRelevance("11111111-1111-4111-8111-111111111111", {
       limit: 20,
       cursor: "22222222-2222-4222-8222-222222222222",
       q: "engineer",
-      location: "state:NSW",
       sort: "newest",
       market: "AU",
     });
@@ -71,9 +70,7 @@ describe("listJobsWithRelevance", () => {
     );
     expect(flattenValues(call.slice(1))).toEqual(
       expect.arrayContaining([
-        "%NSW%",
-        "%New South Wales%",
-        "%Sydney%",
+        "%engineer%",
         "22222222-2222-4222-8222-222222222222",
       ]),
     );

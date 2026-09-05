@@ -5,7 +5,6 @@ import { shouldUseRelevanceSort } from "./searchUtils";
 import { listJobsWithRelevance } from "./jobSearchService";
 import { getVisibleJobMarkets } from "./jobMarketScope";
 import { normalizePostingRiskFlags } from "./jobListItemMapper";
-import { getJobLocationTerms } from "./jobLocationScope";
 import type { JobStatusValue } from "@/lib/shared/jobStatus";
 import { findNearDuplicateJobIds } from "./simHashDuplicateService";
 import { getApplicationReviewId } from "@/lib/server/applications/applicationReviewAvailability";
@@ -15,7 +14,6 @@ export type JobListQuery = {
   cursor?: string;
   status?: JobStatusValue;
   q?: string;
-  location?: string;
   jobLevel?: string;
   sort: "newest" | "oldest";
   /** Locale-backed Jobs workspace. AU and CN remain strictly isolated. */
@@ -64,7 +62,7 @@ type JobWhereClause = Exclude<
 >;
 
 function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
-  const { status, q, location, jobLevel, market } = query;
+  const { status, q, jobLevel, market } = query;
   const andClauses: JobWhereClause[] = [];
 
   if (q) {
@@ -75,18 +73,6 @@ function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
         { location: { contains: q, mode: "insensitive" } },
       ],
     });
-  }
-
-  if (location) {
-    const locationTerms = getJobLocationTerms(location);
-    if (locationTerms?.length) {
-      andClauses.push({
-        OR: locationTerms.map((term) => ({
-          location: { contains: term, mode: "insensitive" },
-        })),
-      });
-      // Unknown state code → omit location filter (don't search for literal "state:XXX")
-    }
   }
 
   if (jobLevel) {
@@ -236,7 +222,6 @@ export async function listJobs(
     `limit=${limit}`,
     `status=${query.status ?? "ALL"}`,
     `q=${query.q ?? ""}`,
-    `location=${query.location ?? ""}`,
     `jobLevel=${query.jobLevel ?? ""}`,
     `sort=${sort}`,
     `market=${query.market ?? ""}`,

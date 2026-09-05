@@ -8,7 +8,6 @@ import type {
 } from "./jobListService";
 import { getVisibleJobMarkets } from "./jobMarketScope";
 import { normalizePostingRiskFlags } from "./jobListItemMapper";
-import { getJobLocationTerms } from "./jobLocationScope";
 import { escapeLikePattern } from "./searchUtils";
 import { findNearDuplicateJobIds } from "./simHashDuplicateService";
 import { getApplicationReviewId } from "@/lib/server/applications/applicationReviewAvailability";
@@ -17,7 +16,7 @@ export async function listJobsWithRelevance(
   userId: string,
   query: JobListQuery,
 ): Promise<JobListResult> {
-  const { q, limit, cursor, status, market, location, jobLevel } = query;
+  const { q, limit, cursor, status, market, jobLevel } = query;
   if (!q) throw new Error("listJobsWithRelevance requires q parameter");
 
   const escaped = escapeLikePattern(q);
@@ -41,15 +40,6 @@ export async function listJobsWithRelevance(
   }
   if (jobLevel)
     conditions.push(Prisma.sql`LOWER(j."jobLevel") = LOWER(${jobLevel})`);
-
-  const locationTerms = getJobLocationTerms(location);
-  if (locationTerms?.length) {
-    const locationConditions = locationTerms.map((term) => {
-      const pattern = `%${escapeLikePattern(term)}%`;
-      return Prisma.sql`j."location" ILIKE ${pattern}`;
-    });
-    conditions.push(Prisma.sql`(${Prisma.join(locationConditions, " OR ")})`);
-  }
 
   const whereClause = Prisma.join(conditions, " AND ");
   const cursorClause = cursor

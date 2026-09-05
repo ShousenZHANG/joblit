@@ -12,7 +12,6 @@ const QuerySchema = z.object({
   cursor: z.string().uuid().optional(),
   status: z.enum(JOB_STATUS_VALUES).optional(),
   q: z.string().trim().min(1).max(80).optional(),
-  location: z.string().trim().min(1).max(80).optional(),
   jobLevel: z.string().trim().min(1).max(80).optional(),
   sort: z.enum(["newest", "oldest"]).optional().default("newest"),
   market: z.enum(["AU", "CN"]).optional(),
