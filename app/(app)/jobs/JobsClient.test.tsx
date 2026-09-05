@@ -175,9 +175,10 @@ beforeEach(() => {
 });
 
 /**
- * Remove lives in the detail overflow now — a destructive action should not
- * hold a permanent slot beside routine ones. Opening the menu is part of
- * every removal, so it is part of the helper rather than repeated per test.
+ * Remove sits directly in the detail header, as a trailing icon-only button.
+ * It is neutral at rest and only turns destructive on hover, which is what
+ * earns it a permanent slot: the delete is a deferred commit behind an Undo
+ * toast, not a point of no return.
  */
 function findRemoveAction() {
   // Remove sits directly in the detail header again — no menu to open. Kept
@@ -2006,10 +2007,11 @@ describe("JobsClient", () => {
       </NextIntlClientProvider>,
     );
 
-    const primaryActions = (
-      await screen.findAllByTestId("job-primary-actions")
-    )[0];
-    const statusCombobox = within(primaryActions).getByRole("combobox");
+    // The status control sits in the header eyebrow, not in the action
+    // toolbar: it reports where a job sits in the pipeline, which is not a
+    // thing you do to the job. Scope to the panel so the query spans both.
+    const detailPanel = (await screen.findAllByTestId("jobs-details-panel"))[0];
+    const statusCombobox = within(detailPanel).getByRole("combobox");
     await user.click(statusCombobox);
     // Scope to option role so we don't accidentally click the status
     // segmented control in the list header (same visible text).

@@ -8,24 +8,14 @@ import React, {
 } from "react";
 import dynamic from "next/dynamic";
 import { useFormatter, useTranslations } from "next-intl";
-import {
-  BarChart3,
-  Briefcase,
-  Building2,
-  CalendarDays,
-  ClipboardList,
-  DollarSign,
-  ExternalLink,
-  FileText,
-  MapPin,
-  Sparkles,
-  Trash2,
-  Wifi,
-} from "lucide-react";
+import { ArrowUpRight, ClipboardList, Sparkles, Trash2 } from "lucide-react";
 import { externalJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { useMarket } from "@/hooks/useMarket";
 import { Button } from "@/components/ui/button";
-import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
+import {
+  COARSE_POINTER_MIN_HEIGHT,
+  COARSE_POINTER_TARGET,
+} from "@/components/ui/touchTarget";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -48,6 +38,8 @@ import {
 } from "../types";
 import { selectableJobStatuses } from "@/lib/shared/jobStatus";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
+import { jobTypeLabelKey, sentenceCase } from "../utils/jobFactLabels";
+import { splitTitleQualifier } from "../utils/splitTitleQualifier";
 import { JobRequirementsPanel } from "./JobRequirementsPanel";
 
 // Markdown body (react-markdown + rehype-highlight + highlight.js CSS) is the
@@ -90,30 +82,35 @@ interface JobDetailPanelProps {
   onRetryDetail: () => void;
 }
 
-/** Small icon + label pill for the header meta row. Renders nothing when the
- *  value is empty so the row stays tight. */
-function MetaChip({
-  icon: Icon,
-  value,
-}: {
-  icon: React.ElementType;
-  value?: string | null;
-}) {
+/**
+ * Feeds ship literal placeholders ("not applicable", "unknown") in jobType and
+ * jobLevel — the absence of a value dressed as one. Same rule as the list rows.
+ */
+const PLACEHOLDER_FACT = /^(not applicable|unknown|n\/a|none)$/i;
+
+function visibleFact(value?: string | null): string | null {
   const text = value?.trim();
-  // Source feeds ship literal placeholders ("not applicable", "unknown") in
-  // jobType/jobLevel — the absence of a value, not a value. Same rule as the
-  // list rows.
-  if (!text || /^(not applicable|unknown|n\/a|none)$/i.test(text)) return null;
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/70 px-2.5 py-1 text-xs font-medium text-foreground/75 shadow-sm">
-      <Icon
-        className="h-3.5 w-3.5 shrink-0 text-brand-emerald-600 dark:text-brand-emerald-400"
-        aria-hidden
-      />
-      <span className="truncate">{text}</span>
-    </span>
-  );
+  if (!text || PLACEHOLDER_FACT.test(text)) return null;
+  return text;
 }
+
+/**
+ * One entry in the header's property strip.
+ *
+ * The strip replaced a row of eight identical bordered chips. Boxes are what
+ * made every property equal: the employer, the words "fulltime" and the posted
+ * date all carried the same border, fill and icon, so the row had no first
+ * read. As plain text separated by middots, weight is available again — and it
+ * is spent on exactly one fact, the salary, which is the number people compare
+ * postings on.
+ */
+type HeaderFact = {
+  key: string;
+  text: string;
+  /** Only where the label is not obvious from the value itself. */
+  srLabel?: string;
+  className?: string;
+};
 
 interface SavedDocumentButtonProps {
   label: string;
@@ -134,10 +131,13 @@ function SavedDocumentButton({
   className,
   onOpenTailor,
 }: SavedDocumentButtonProps) {
-  const shared = `w-full justify-center rounded-xl border-border bg-background text-sm font-medium text-foreground/85 shadow-sm transition-all duration-200 hover:border-border hover:bg-muted active:translate-y-[1px] sm:w-auto ${className} px-4`;
+  // Tinted, not bordered. A published CV is Tailor's own output, so it sits one
+  // step below the filled Tailor button and one step above the ghost link that
+  // leaves the product — a bordered control here read as a form field beside it.
+  const shared = cn("w-full justify-center", className);
   if (!onOpenTailor) {
     return (
-      <Button variant="outline" size="sm" asChild className={shared}>
+      <Button variant="secondary" size="sm" asChild className={shared}>
         <a href={href} target="_blank" rel="noreferrer">
           {label}
         </a>
@@ -146,7 +146,7 @@ function SavedDocumentButton({
   }
   return (
     <Button
-      variant="outline"
+      variant="secondary"
       size="sm"
       onClick={onOpenTailor}
       className={shared}
@@ -227,12 +227,80 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
     (titleRef.current ?? panelRootRef.current)?.focus();
   }, [selectedJob?.id]);
 
-  const isAppliedSelected = selectedJob?.status === "APPLIED";
   const listOpacityClass = showLoadingOverlay ? "opacity-70" : "opacity-100";
-  const actionHeight = cn(
-    isAppliedSelected ? "h-9" : "h-10",
-    COARSE_POINTER_MIN_HEIGHT,
+  // One height for every control at every status. The toolbar used to shrink
+  // from h-10 to h-9 when a job was marked Applied, so choosing a status made
+  // the row it lives in jump.
+  const actionHeight = cn("h-10 lg:h-8", COARSE_POINTER_MIN_HEIGHT);
+
+  const titleParts = useMemo(
+    () => splitTitleQualifier(selectedJob?.title ?? ""),
+    [selectedJob?.title],
   );
+
+  const facts = useMemo((): HeaderFact[] => {
+    if (!selectedJob) return [];
+    const out: HeaderFact[] = [];
+    const push = (fact: HeaderFact | null) => {
+      if (fact) out.push(fact);
+    };
+    const arrangement = visibleFact(selectedJob.workArrangement);
+    push(
+      arrangement
+        ? { key: "arrangement", text: sentenceCase(arrangement) }
+        : null,
+    );
+    const rawType = visibleFact(selectedJob.jobType);
+    if (rawType) {
+      const key = jobTypeLabelKey(rawType);
+      // An unrecognised value is shown as the posting wrote it: a fact the
+      // employer stated beats a tidy blank.
+      push({
+        key: "type",
+        text: key ? t(key) : sentenceCase(rawType),
+        srLabel: t("type"),
+      });
+    }
+    const level = visibleFact(selectedJob.jobLevel);
+    push(level ? { key: "level", text: sentenceCase(level) } : null);
+    const salary = visibleFact(selectedJob.salary);
+    push(
+      salary
+        ? {
+            key: "salary",
+            text: salary,
+            className: "font-medium tabular-nums text-foreground",
+          }
+        : null,
+    );
+    if (selectedJob.livenessStatus === "EXPIRED") {
+      push({
+        key: "liveness",
+        text: t("livenessExpired"),
+        // Same hue the list row gives this signal, without the chip around it.
+        className: "font-medium text-rose-800 dark:text-rose-300",
+      });
+    } else if (selectedJob.livenessStatus === "UNCERTAIN") {
+      push({
+        key: "liveness",
+        text: t("livenessUncertain"),
+        className: "font-medium text-amber-800 dark:text-amber-300",
+      });
+    }
+    if (selectedJob.listingDate) {
+      push({
+        key: "posted",
+        text: t("postedDate", {
+          date: format.dateTime(new Date(selectedJob.listingDate), {
+            day: "numeric",
+            month: "short",
+          }),
+        }),
+        className: "text-muted-foreground/80",
+      });
+    }
+    return out;
+  }, [selectedJob, t, format]);
 
   return (
     <div
@@ -255,191 +323,240 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-px bg-gradient-to-r from-transparent via-brand-emerald-400/70 to-transparent"
       />
 
-      <div className="relative border-b border-border/60 px-4 py-4">
-        {/* Soft gradient wash behind the header for depth. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-brand-emerald-50/60 via-transparent to-transparent dark:from-brand-emerald-500/[0.06]"
-        />
+      <div className="relative border-b border-border/60 px-4 pb-4 pt-3.5">
         {selectedJob ? (
-          // Always stack the info block above the action row — an earlier
-          // flex-wrap layout sat actions inline for short titles and
-          // wrapped to a new line for long ones, so the button row shifted
-          // position per job. Forcing a two-row layout gives every job the
-          // same "title / company → actions" rhythm.
-          <div className="relative flex flex-col gap-3.5">
-            <div className="space-y-2.5">
-              {/* No status pill here: the Select below is the status
-                  surface, and it can be edited — the pill was its read-only
-                  echo two centimetres away. */}
-              <h2
-                ref={titleRef}
-                tabIndex={-1}
-                className="rounded-md text-xl font-bold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2"
+          <div className="relative flex flex-col">
+            {/* Row 1 — who and where, then where it sits in the pipeline.
+                Company and location are the sentence people say about a job,
+                so they lead; the status is the one thing on this line the user
+                can change. */}
+            <div className="flex min-h-8 items-center justify-between gap-3">
+              <p className="min-w-0 truncate text-sm leading-5">
+                <span className="sr-only">{t("company")}: </span>
+                <span className="font-medium text-foreground/85">
+                  {visibleFact(selectedJob.company) ?? t("unknownCompany")}
+                </span>
+                {visibleFact(selectedJob.location) ? (
+                  <>
+                    <span
+                      aria-hidden
+                      className="mx-1.5 select-none text-foreground/25"
+                    >
+                      ·
+                    </span>
+                    <span className="sr-only">{t("location")}: </span>
+                    <span className="text-muted-foreground">
+                      {visibleFact(selectedJob.location)}
+                    </span>
+                  </>
+                ) : null}
+              </p>
+              {/* Still a Select — same role, same options, same keyboard
+                  behaviour — but stripped of the border, fill, shadow and
+                  fixed width that made a piece of state read as a form field
+                  waiting to be filled in. The dot carries the status. */}
+              <Select
+                value={statusPresentation?.status}
+                onValueChange={(v) =>
+                  onUpdateStatus(selectedJob.id, v as JobStatus)
+                }
+                disabled={updatingIds.has(selectedJob.id)}
               >
-                {selectedJob.title}
-              </h2>
-              {/* Meta as icon chips — replaces the flat dotted text line for a
-                  scannable, premium header. */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <MetaChip icon={Building2} value={selectedJob.company} />
-                <MetaChip icon={MapPin} value={selectedJob.location} />
-                <MetaChip icon={Briefcase} value={selectedJob.jobType} />
-                <MetaChip icon={BarChart3} value={selectedJob.jobLevel} />
-                <MetaChip icon={DollarSign} value={selectedJob.salary} />
-                <MetaChip icon={Wifi} value={selectedJob.workArrangement} />
-                <MetaChip
-                  icon={ClipboardList}
-                  value={
-                    selectedJob.livenessStatus === "EXPIRED"
-                      ? t("livenessExpired")
-                      : selectedJob.livenessStatus === "UNCERTAIN"
-                        ? t("livenessUncertain")
-                        : null
-                  }
-                />
-                <MetaChip
-                  icon={CalendarDays}
-                  value={
-                    selectedJob.listingDate
-                      ? t("postedDate", {
-                          date: format.dateTime(
-                            new Date(selectedJob.listingDate),
-                            {
-                              day: "numeric",
-                              month: "short",
-                            },
-                          ),
-                        })
+                <SelectTrigger
+                  size="sm"
+                  aria-label={t("status")}
+                  className={cn(
+                    "-mr-2 w-auto shrink-0 gap-1.5 rounded-md border-0 bg-transparent px-2 text-sm font-medium text-foreground/80 shadow-none",
+                    "hover:bg-muted/70 hover:text-foreground data-[state=open]:bg-muted/70",
+                    "dark:bg-transparent dark:hover:bg-muted/50",
+                    "[&_svg]:size-3.5 [&_svg]:opacity-60",
+                    COARSE_POINTER_MIN_HEIGHT,
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "size-2 shrink-0 rounded-full transition-colors duration-[var(--dur-fast)]",
+                      statusPresentation?.dotClass,
+                    )}
+                  />
+                  <span className="truncate">
+                    {statusPresentation ? t(statusPresentation.labelKey) : null}
+                  </span>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {selectableJobStatuses(selectedJob.status).map((status) => (
+                    <SelectItem key={status} value={status}>
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-2 shrink-0 rounded-full",
+                          jobStatusPresentation(status).dotClass,
+                        )}
+                      />
+                      {t(JOB_STATUS_LABEL_KEYS[status])}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Row 2 — the role. The qualifier stays inside this heading, so
+                the accessible name is still the title as posted, but it stops
+                competing with the role name for the first read. */}
+            <h2
+              ref={titleRef}
+              tabIndex={-1}
+              className="mt-1 rounded-md text-balance text-xl font-semibold leading-tight tracking-tight text-foreground [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 sm:text-2xl"
+            >
+              {titleParts.main}
+              {titleParts.qualifier ? (
+                <>
+                  {" "}
+                  <span className="mt-0.5 block text-sm font-normal leading-5 tracking-normal text-muted-foreground">
+                    {titleParts.qualifier}
+                  </span>
+                </>
+              ) : null}
+            </h2>
+
+            {/* Row 3 — the facts, uniformly quiet except the one people
+                compare postings on. Omitted entirely when nothing survives the
+                placeholder filter, so there is no orphan gap. */}
+            {facts.length ? (
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-muted-foreground">
+                {facts.map((fact, index) => (
+                  <React.Fragment key={fact.key}>
+                    {index > 0 ? (
+                      <span
+                        aria-hidden
+                        className="select-none text-foreground/25"
+                      >
+                        ·
+                      </span>
+                    ) : null}
+                    {fact.srLabel ? (
+                      <span className="sr-only">{fact.srLabel}: </span>
+                    ) : null}
+                    <span className={fact.className}>{fact.text}</span>
+                  </React.Fragment>
+                ))}
+              </p>
+            ) : null}
+
+            {/* Row 4 — one filled surface, and it is the action that moves an
+                application forward. Open job leaves the product, so it is the
+                cheapest-looking control on the row, and Remove stays neutral
+                until hover: the delete is a deferred commit behind an Undo
+                toast (useJobMutations). */}
+            <div
+              data-testid="job-primary-actions"
+              className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-2"
+            >
+              {/* CN ships a single Chinese resume with no tailoring, so it gets
+                  no entry point at all. */}
+              {!isCN ? (
+                <Button
+                  size="sm"
+                  data-testid="job-tailor-button"
+                  onClick={() => onTailor(selectedJob, "resume")}
+                  className={cn(
+                    "w-full justify-center sm:col-span-2 lg:w-auto",
+                    actionHeight,
+                  )}
+                >
+                  <Sparkles aria-hidden />
+                  {t("tailorAction")}
+                </Button>
+              ) : null}
+              {!isCN && selectedJob.resumePdfUrl ? (
+                <SavedDocumentButton
+                  label={t("savedCv")}
+                  href={selectedJob.resumePdfUrl}
+                  className={cn(actionHeight, "lg:w-auto")}
+                  onOpenTailor={
+                    selectedJob.applicationId
+                      ? () => onTailor(selectedJob, "resume")
                       : null
                   }
                 />
-              </div>
-            </div>
-            <div className="w-full">
-              <div
-                data-testid="job-primary-actions"
-                className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-2"
-              >
-                <Select
-                  value={statusPresentation?.status}
-                  onValueChange={(v) =>
-                    onUpdateStatus(selectedJob.id, v as JobStatus)
+              ) : null}
+              {!isCN && selectedJob.coverPdfUrl ? (
+                <SavedDocumentButton
+                  label={t("savedCl")}
+                  href={selectedJob.coverPdfUrl}
+                  className={cn(actionHeight, "lg:w-auto")}
+                  onOpenTailor={
+                    selectedJob.applicationId
+                      ? () => onTailor(selectedJob, "cover")
+                      : null
                   }
-                  disabled={updatingIds.has(selectedJob.id)}
-                >
-                  <SelectTrigger
-                    className={cn(
-                      "rounded-xl border-border bg-background shadow-sm",
-                      COARSE_POINTER_MIN_HEIGHT,
-                      isAppliedSelected
-                        ? "h-9 w-full px-3 text-sm sm:w-[118px]"
-                        : "h-10 w-full sm:w-[132px]",
-                    )}
-                  >
-                    <span className="truncate">
-                      {statusPresentation
-                        ? t(statusPresentation.labelKey)
-                        : null}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {selectableJobStatuses(selectedJob.status).map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {t(JOB_STATUS_LABEL_KEYS[status])}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
+              ) : null}
+              <div className="flex items-center gap-2 sm:col-span-2 lg:col-auto lg:ml-auto">
                 <Button
                   asChild
+                  variant="ghost"
                   size="sm"
-                  className={`w-full justify-center rounded-xl border border-brand-emerald-500 bg-brand-emerald-500 text-sm font-semibold text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.8)] transition-all duration-200 hover:border-brand-emerald-600 hover:bg-brand-emerald-600 active:translate-y-[1px] sm:w-auto ${actionHeight} px-4`}
+                  className={cn(
+                    "flex-1 justify-center text-foreground/80 hover:text-foreground lg:flex-none",
+                    actionHeight,
+                  )}
                 >
-                  <a href={externalJobUrl(selectedJob.jobUrl)} target="_blank" rel="noreferrer">
-                    <ExternalLink className="mr-1 h-4 w-4" />
+                  <a
+                    href={externalJobUrl(selectedJob.jobUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     {t("openJob")}
+                    <ArrowUpRight className="size-3.5 opacity-60" aria-hidden />
                   </a>
                 </Button>
-                {!isCN && selectedJob.resumePdfUrl ? (
-                  <SavedDocumentButton
-                    label={t("savedCv")}
-                    href={selectedJob.resumePdfUrl}
-                    className={actionHeight}
-                    onOpenTailor={
-                      selectedJob.applicationId
-                        ? () => onTailor(selectedJob, "resume")
-                        : null
-                    }
-                  />
-                ) : null}
-                {!isCN && selectedJob.coverPdfUrl ? (
-                  <SavedDocumentButton
-                    label={t("savedCl")}
-                    href={selectedJob.coverPdfUrl}
-                    className={actionHeight}
-                    onOpenTailor={
-                      selectedJob.applicationId
-                        ? () => onTailor(selectedJob, "cover")
-                        : null
-                    }
-                  />
-                ) : null}
-                {/* The trailing cluster: what is neither "open this job" nor
-                    "read what we generated for it". Remove stays icon-only and
-                    neutral until hover — the delete is a deferred commit
-                    behind an Undo toast (useJobMutations) — while Tailor, the
-                    step that moves an application forward, carries the visual
-                    weight beside it. */}
-                <div className="flex items-center gap-2 lg:ml-auto">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={t("remove")}
-                    title={t("remove")}
-                    data-testid="job-remove-button"
-                    disabled={deletingIds.has(selectedJob.id)}
-                    onClick={() => {
-                      focusAfterDeleteRef.current = true;
-                      onDelete(selectedJob);
-                    }}
-                    className={`flex-1 justify-center rounded-xl text-foreground/60 transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 sm:w-9 sm:flex-none ${actionHeight} px-0`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                  </Button>
-                  {/* CN ships a single Chinese resume with no tailoring, so it
-                      gets no entry point at all. */}
-                  {!isCN ? (
-                    <Button
-                      size="sm"
-                      data-testid="job-tailor-button"
-                      onClick={() => onTailor(selectedJob, "resume")}
-                      className={`flex-1 justify-center rounded-xl text-sm font-semibold shadow-sm sm:flex-none ${actionHeight} px-4`}
-                    >
-                      <Sparkles className="h-4 w-4" aria-hidden />
-                      {t("tailorAction")}
-                    </Button>
-                  ) : null}
-                </div>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t("remove")}
+                  title={t("remove")}
+                  data-testid="job-remove-button"
+                  disabled={deletingIds.has(selectedJob.id)}
+                  onClick={() => {
+                    focusAfterDeleteRef.current = true;
+                    onDelete(selectedJob);
+                  }}
+                  className={cn(
+                    "size-10 shrink-0 text-foreground/55 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 lg:size-8",
+                    COARSE_POINTER_TARGET,
+                  )}
+                >
+                  <Trash2 aria-hidden />
+                </Button>
               </div>
             </div>
+
+            {/* Row 5 — provenance is a footnote. Each string stays one text
+                node so a whole-string query still matches it. */}
             {tailorSource ? (
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
                 {tailorSource.cv ? (
-                  <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
+                  <span>
                     {t("tailorSourceCv", {
                       source: tailorSourceLabel(tailorSource.cv),
                     })}
                   </span>
                 ) : null}
+                {tailorSource.cv && tailorSource.cover ? (
+                  <span aria-hidden className="select-none text-foreground/25">
+                    ·
+                  </span>
+                ) : null}
                 {tailorSource.cover ? (
-                  <span className="rounded-full border border-border/60 bg-muted/60 px-2 py-0.5">
+                  <span>
                     {t("tailorSourceCover", {
                       source: tailorSourceLabel(tailorSource.cover),
                     })}
                   </span>
                 ) : null}
-              </div>
+              </p>
             ) : null}
           </div>
         ) : (
@@ -458,12 +575,12 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         <div className="p-4">
           {selectedJob ? (
             <div className="space-y-4 text-sm text-muted-foreground">
-              {/* Premium section header — icon + label + hairline rule. */}
+              {/* Label plus hairline rule. The emerald medallion that used to
+                  sit here was the loudest thing on the panel once the header
+                  stopped competing with it — a decorated tile announcing the
+                  section you were already reading. */}
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-emerald-50 text-brand-emerald-text ring-1 ring-brand-emerald-100 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300">
-                  <FileText className="h-3.5 w-3.5" aria-hidden />
-                </span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-foreground/80">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   {t("jobDescriptionTitle")}
                 </span>
                 <span
