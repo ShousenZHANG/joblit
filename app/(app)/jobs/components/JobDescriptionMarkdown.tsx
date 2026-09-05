@@ -15,20 +15,33 @@ import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
 // (~130KB gzip combined) load as a dynamic chunk only when a job is selected,
 // instead of riding in the jobs-list critical path. Imported via next/dynamic
 // from JobDetailPanel.
+/**
+ * One type scale for the description, aligned to the panel around it.
+ *
+ * Body was 15px while every control, chip and label on the same pane is 13-14,
+ * so the description read as though the page had been zoomed. The steps are
+ * 14 / 16 / 20: body and subheadings share a size and separate on weight,
+ * section headings take the one step up, and nothing else competes.
+ *
+ * Section rules are gone. A hairline above every `##` cut a job ad into six
+ * boxed fragments; spacing does the same grouping without drawing a line the
+ * content did not ask for.
+ */
 const markdownStyles = {
-  heading:
-    "text-lg font-semibold text-foreground border-t border-border/60 pt-4 mt-4 first:border-0 first:mt-0 first:pt-0",
-  subheading: "text-base font-semibold text-foreground mt-3",
-  paragraph: "text-[15px] leading-relaxed text-foreground/85",
-  list: "list-disc space-y-1.5 pl-5 text-[15px] text-foreground/85",
-  listOrdered: "list-decimal space-y-1.5 pl-5 text-[15px] text-foreground/85",
-  listItem: "text-[15px] leading-relaxed text-foreground/85",
+  heading: "mt-6 text-base font-semibold text-foreground first:mt-0",
+  subheading: "mt-4 text-sm font-semibold text-foreground",
+  paragraph: "text-sm leading-6 text-foreground/85",
+  list: "list-disc space-y-1 pl-5 text-sm leading-6 text-foreground/85 marker:text-muted-foreground",
+  listOrdered:
+    "list-decimal space-y-1 pl-5 text-sm leading-6 text-foreground/85 marker:text-muted-foreground",
+  listItem: "text-sm leading-6 text-foreground/85",
   blockquote:
-    "border-l-2 border-brand-emerald-200 bg-brand-emerald-50/40 px-4 py-2 text-sm text-foreground/85 rounded-r-lg",
-  codeInline: "rounded bg-muted px-1.5 py-0.5 text-xs text-foreground/90",
-  pre: "rounded-lg border border-border/60 bg-muted/50 p-3 text-xs text-foreground/90 overflow-auto",
-  link: "text-brand-emerald-text underline-offset-4 hover:underline",
-  table: "w-full border-collapse text-sm",
+    "rounded-r-lg border-l-2 border-brand-emerald-300 bg-brand-emerald-50/40 px-4 py-2 text-sm leading-6 text-foreground/85 dark:bg-brand-emerald-500/10",
+  codeInline:
+    "rounded bg-muted px-1.5 py-0.5 font-mono text-[13px] text-foreground/90",
+  pre: "overflow-auto rounded-lg border border-border/60 bg-muted/50 p-3 text-[13px] leading-6 text-foreground/90",
+  link: "text-brand-emerald-text underline underline-offset-4 decoration-brand-emerald-300 hover:decoration-current",
+  table: "w-full border-collapse text-[13px]",
   th: "border border-border/60 bg-muted/50 px-3 py-2 text-left font-semibold text-foreground",
   td: "border border-border/60 px-3 py-2 text-foreground/85",
 };
@@ -305,7 +318,7 @@ export function JobDescriptionMarkdown({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight, experienceHighlightPlugin]}

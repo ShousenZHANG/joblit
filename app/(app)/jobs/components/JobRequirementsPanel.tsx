@@ -199,7 +199,7 @@ function ExperienceLine({
       )}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="text-2xl font-semibold leading-tight tracking-tight tabular-nums text-foreground">
+        <span className="text-xl font-semibold leading-none tracking-tight tabular-nums text-foreground">
           {requirement.years.text}
         </span>
         {requirement.scope ? (
@@ -275,7 +275,7 @@ export function JobRequirementsPanel({
 
       <div className="mt-3 grid min-w-0 gap-3 @lg:grid-cols-2">
         {blocks.length ? (
-          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.035] p-4">
+          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.035] p-3.5">
             <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75">
               <CalendarClock
                 className="h-3.5 w-3.5 text-brand-blue"
@@ -284,7 +284,7 @@ export function JobRequirementsPanel({
               {t("experienceHeading")}
             </h4>
             <div
-              className="mt-3 min-w-0 space-y-2"
+              className="mt-2.5 min-w-0 space-y-2"
             >
               {blocks.map((block) => (
                 <div
@@ -341,14 +341,14 @@ export function JobRequirementsPanel({
         {signals.length ? (
           <div
             className={cn(
-              "min-w-0 rounded-xl border border-border/70 bg-muted/30 p-4",
+              "min-w-0 rounded-xl border border-border/70 bg-muted/30 p-3.5",
               !blocks.length && "@lg:col-span-2",
             )}
           >
             <h4 className="text-xs font-semibold text-foreground/75">
               {t("technologyHeading")}
             </h4>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
               {signals.map((signal) => (
                 <span
                   key={signal.skill}
@@ -357,7 +357,7 @@ export function JobRequirementsPanel({
                   aria-label={signal.skill}
                   title={signal.evidence}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium",
+                    "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[13px] font-medium",
                     signalTone(),
                   )}
                 >

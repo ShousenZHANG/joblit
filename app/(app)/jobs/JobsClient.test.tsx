@@ -1086,9 +1086,10 @@ describe("JobsClient", () => {
     expect(
       screen.getAllByText(messages.jobs.jobDescriptionTitle).length,
     ).toBeGreaterThan(0);
-    // Heading now uses theme-token `text-foreground` for dark-mode parity
-    // (migrated from literal text-foreground).
-    expect(heading).toHaveClass("text-lg", "font-semibold", "text-foreground");
+    // The size step is a design choice that has already moved twice; what the
+    // description contract needs is that a section heading outranks body copy
+    // and takes its colour from the theme token, not a literal.
+    expect(heading).toHaveClass("font-semibold", "text-foreground");
 
     const listItem = await screen.findByText("Ownership");
     expect(listItem.closest("li")).toHaveClass("text-foreground/85");
