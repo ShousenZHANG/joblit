@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import dynamic from "next/dynamic";
 import { useFormatter, useTranslations } from "next-intl";
-import { ArrowUpRight, ClipboardList, MapPin, Sparkles, Trash2 } from "lucide-react";
+import { ArrowUpRight, ClipboardList, Sparkles, Trash2 } from "lucide-react";
 import { externalJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { useMarket } from "@/hooks/useMarket";
 import { Button } from "@/components/ui/button";
@@ -244,6 +244,21 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
     const push = (fact: HeaderFact | null) => {
       if (fact) out.push(fact);
     };
+    // The employer is the one fact that is not about the job, so it leads
+    // and takes the brand colour: it stays the anchor of the header without
+    // holding a row, a monogram tile and a whole line of its own.
+    push({
+      key: "company",
+      text: visibleFact(selectedJob.company) ?? t("unknownCompany"),
+      srLabel: t("company"),
+      className: "font-medium text-brand-emerald-text",
+    });
+    const location = visibleFact(selectedJob.location);
+    push(
+      location
+        ? { key: "location", text: location, srLabel: t("location") }
+        : null,
+    );
     const arrangement = visibleFact(selectedJob.workArrangement);
     push(
       arrangement
@@ -326,17 +341,26 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
       <div className="relative shrink-0 border-b border-border/70 bg-gradient-to-br from-muted/45 via-background to-background px-5 pb-4 pt-4 sm:px-7">
         {selectedJob ? (
           <div className="relative flex flex-col">
-            {/* Employer identity and workflow status anchor the header. */}
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-background text-sm font-semibold text-foreground shadow-xs">
-                  {(visibleFact(selectedJob.company) ?? t("unknownCompany")).charAt(0).toUpperCase()}
-                </span>
-                <p className="min-w-0 text-sm font-semibold leading-5 text-foreground/80 [overflow-wrap:anywhere]">
-                  <span className="sr-only">{t("company")}: </span>
-                  {visibleFact(selectedJob.company) ?? t("unknownCompany")}
-                </p>
-              </div>
+            {/* The role and its pipeline state share the top line. The
+                employer used to hold this row on its own, behind a monogram
+                tile repeating its first letter; it now leads the fact strip
+                below, which costs no row at all. */}
+            <div className="flex items-start justify-between gap-4">
+              <h2
+                ref={titleRef}
+                tabIndex={-1}
+                className="min-w-0 flex-1 rounded-md text-balance text-xl font-semibold leading-[1.25] tracking-tight text-foreground [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 sm:text-2xl"
+              >
+                {titleParts.main}
+                {titleParts.qualifier ? (
+                  <>
+                    {" "}
+                    <span className="mt-1.5 block text-sm font-normal leading-5 tracking-normal text-muted-foreground">
+                      {titleParts.qualifier}
+                    </span>
+                  </>
+                ) : null}
+              </h2>
               <Select
                 value={statusPresentation?.status}
                 onValueChange={(v) =>
@@ -383,37 +407,11 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
               </Select>
             </div>
 
-            {/* Row 2 — the role. The qualifier stays inside this heading, so
-                the accessible name is still the title as posted, but it stops
-                competing with the role name for the first read. */}
-            <h2
-              ref={titleRef}
-              tabIndex={-1}
-              className="mt-3.5 max-w-[34ch] rounded-md text-balance text-xl font-semibold leading-[1.25] tracking-tight text-foreground [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 sm:text-2xl"
-            >
-              {titleParts.main}
-              {titleParts.qualifier ? (
-                <>
-                  {" "}
-                  <span className="mt-1.5 block text-sm font-normal leading-5 tracking-normal text-muted-foreground">
-                    {titleParts.qualifier}
-                  </span>
-                </>
-              ) : null}
-            </h2>
-
-            {visibleFact(selectedJob.location) ? (
-              <p className="mt-3 flex items-start gap-1.5 text-sm leading-5 text-muted-foreground">
-                <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                <span><span className="sr-only">{t("location")}: </span>{visibleFact(selectedJob.location)}</span>
-              </p>
-            ) : null}
-
-            {/* Row 3 — the facts, uniformly quiet except the one people
+            {/* Row 2 — the facts, uniformly quiet except the one people
                 compare postings on. Omitted entirely when nothing survives the
                 placeholder filter, so there is no orphan gap. */}
             {facts.length ? (
-              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
+              <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-muted-foreground">
                 {facts.map((fact, index) => (
                   <React.Fragment key={fact.key}>
                     {index > 0 ? (
@@ -508,12 +506,17 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     focusAfterDeleteRef.current = true;
                     onDelete(selectedJob);
                   }}
+                  // A borderless glyph gave the one destructive action on
+                  // the row the weakest affordance on it: nothing said it was
+                  // a control until the pointer was already there. It now
+                  // carries the same border and height as Open job beside it,
+                  // and only turns destructive on approach.
                   className={cn(
-                    "ml-auto size-11 shrink-0 rounded-xl border border-transparent text-muted-foreground hover:translate-y-0 hover:shadow-none before:hidden hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50",
+                    "ml-auto size-11 shrink-0 rounded-xl border border-border/70 bg-background text-muted-foreground shadow-xs transition-colors hover:translate-y-0 hover:shadow-none before:hidden hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50",
                     COARSE_POINTER_TARGET,
                   )}
                 >
-                  <Trash2 aria-hidden />
+                  <Trash2 className="size-[18px]" aria-hidden />
                 </Button>
               </div>
             </div>

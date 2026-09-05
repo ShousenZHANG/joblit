@@ -273,9 +273,9 @@ export function JobRequirementsPanel({
         </h3>
       </div>
 
-      <div className="mt-2.5 grid min-w-0 gap-2.5 @lg:grid-cols-2">
+      <div className="mt-2 grid min-w-0 gap-2 @lg:grid-cols-2">
         {blocks.length ? (
-          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.035] p-3">
+          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.035] px-3.5 py-2.5">
             <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75">
               <CalendarClock
                 className="h-3.5 w-3.5 text-brand-blue"
@@ -284,7 +284,7 @@ export function JobRequirementsPanel({
               {t("experienceHeading")}
             </h4>
             <div
-              className="mt-2.5 min-w-0 space-y-2"
+              className="mt-1.5 min-w-0 space-y-2"
             >
               {blocks.map((block) => (
                 <div
@@ -341,14 +341,14 @@ export function JobRequirementsPanel({
         {signals.length ? (
           <div
             className={cn(
-              "min-w-0 rounded-xl border border-border/70 bg-muted/30 p-3",
+              "min-w-0 rounded-lg border border-border/70 bg-muted/30 px-3.5 py-2.5",
               !blocks.length && "@lg:col-span-2",
             )}
           >
             <h4 className="text-xs font-semibold text-foreground/75">
               {t("technologyHeading")}
             </h4>
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {signals.map((signal) => (
                 <span
                   key={signal.skill}
