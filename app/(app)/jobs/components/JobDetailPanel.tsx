@@ -481,8 +481,15 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   asChild
                   variant="outline"
                   size="sm"
+                  // Tinted rather than filled. This opens the source
+                  // posting, so it carries the blue those boards are known by
+                  // and reads as its own kind of action next to Tailor — but
+                  // a second filled surface would put the link that leaves the
+                  // product at the same weight as the one that moves an
+                  // application forward, which is the balance this header was
+                  // rebuilt to fix.
                   className={cn(
-                    "justify-center border-border bg-background text-foreground/80 shadow-xs hover:bg-muted/70 hover:text-foreground hover:shadow-xs",
+                    "justify-center border-brand-blue/30 bg-brand-blue/[0.06] font-medium text-brand-blue shadow-xs transition-colors hover:border-brand-blue/50 hover:bg-brand-blue/[0.12] hover:text-brand-blue hover:shadow-xs dark:bg-brand-blue/10 dark:hover:bg-brand-blue/20",
                     actionHeight,
                   )}
                 >
@@ -492,7 +499,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     rel="noreferrer"
                   >
                     {t("openJob")}
-                    <ArrowUpRight className="size-3.5 opacity-60" aria-hidden />
+                    <ArrowUpRight className="size-3.5 opacity-70" aria-hidden />
                   </a>
                 </Button>
                 <Button
@@ -594,7 +601,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   <Skeleton className="h-4 w-3/4" />
                 </div>
               ) : (
-                <div className="max-w-[68ch] text-foreground/85 [overflow-wrap:anywhere]">
+                <div className="max-w-[70ch] text-foreground/85 [overflow-wrap:anywhere]">
                   {selectedDescription ? (
                     <JobDescriptionMarkdown
                       description={selectedDescription}

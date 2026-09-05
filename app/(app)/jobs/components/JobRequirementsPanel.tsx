@@ -199,7 +199,7 @@ function ExperienceLine({
       )}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="text-lg font-semibold leading-none tracking-tight tabular-nums text-foreground">
+        <span className="text-base font-semibold leading-none tracking-tight tabular-nums text-foreground">
           {requirement.years.text}
         </span>
         {requirement.scope ? (
@@ -275,17 +275,20 @@ export function JobRequirementsPanel({
 
       <div className="mt-2 grid min-w-0 gap-2 @lg:grid-cols-2">
         {blocks.length ? (
-          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.035] px-3.5 py-2.5">
-            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75">
-              <CalendarClock
-                className="h-3.5 w-3.5 text-brand-blue"
-                aria-hidden
-              />
-              {t("experienceHeading")}
-            </h4>
-            <div
-              className="mt-1.5 min-w-0 space-y-2"
-            >
+          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.035] px-3 py-2">
+            {/* Label and value share a line. Each label held a row of its
+                own above content that was one figure or one chip, so a card
+                summarising two facts reserved the height of a card
+                summarising ten. */}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h4 className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-foreground/75">
+                <CalendarClock
+                  className="h-3.5 w-3.5 text-brand-blue"
+                  aria-hidden
+                />
+                {t("experienceHeading")}
+              </h4>
+              <div className="min-w-0 flex-1 space-y-2">
               {blocks.map((block) => (
                 <div
                   key={block.key}
@@ -334,6 +337,7 @@ export function JobRequirementsPanel({
                   })}
                 </div>
               ))}
+              </div>
             </div>
           </div>
         ) : null}
@@ -341,14 +345,15 @@ export function JobRequirementsPanel({
         {signals.length ? (
           <div
             className={cn(
-              "min-w-0 rounded-lg border border-border/70 bg-muted/30 px-3.5 py-2.5",
+              "min-w-0 rounded-lg border border-border/70 bg-muted/30 px-3 py-2",
               !blocks.length && "@lg:col-span-2",
             )}
           >
-            <h4 className="text-xs font-semibold text-foreground/75">
-              {t("technologyHeading")}
-            </h4>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h4 className="shrink-0 text-xs font-semibold text-foreground/75">
+                {t("technologyHeading")}
+              </h4>
+              <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
               {signals.map((signal) => (
                 <span
                   key={signal.skill}
@@ -364,6 +369,7 @@ export function JobRequirementsPanel({
                   {signal.skill}
                 </span>
               ))}
+              </div>
             </div>
           </div>
         ) : null}

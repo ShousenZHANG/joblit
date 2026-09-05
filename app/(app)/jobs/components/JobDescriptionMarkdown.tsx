@@ -20,25 +20,25 @@ import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
  *
  * This block had been pulled down to 14px to match the chrome around it, which
  * got the relationship backwards: the panel exists to show a job ad, and the
- * ad was rendered at the size of the buttons framing it. Body copy is 16px
- * over a 28px line, the size long-form text is set at when someone is expected
- * to read rather than scan it, on a measure short enough to stay readable.
+ * ad was rendered at the size of the buttons framing it. Body copy is 15px
+ * over a 26px line — long-form reading size, one step under the 16px it was
+ * briefly set at, which overshot once the header around it went compact.
  *
- * Steps are 16 / 18 and nothing else competes. Subheadings share the body size
+ * Steps are 15 / 17 and nothing else competes. Subheadings share the body size
  * and separate on weight; section headings take the one step up. Section rules
  * are gone — a hairline above every `##` cut a job ad into boxed fragments,
  * and the space above each heading already groups them.
  */
 const markdownStyles = {
-  heading: "mt-7 text-lg font-semibold tracking-tight text-foreground first:mt-0",
-  subheading: "mt-5 text-base font-semibold text-foreground",
-  paragraph: "text-base leading-7 text-foreground/85",
-  list: "list-disc space-y-1.5 pl-5 text-base leading-7 text-foreground/85 marker:text-muted-foreground",
+  heading: "mt-6 text-[17px] font-semibold tracking-tight text-foreground first:mt-0",
+  subheading: "mt-4 text-[15px] font-semibold text-foreground",
+  paragraph: "text-[15px] leading-[26px] text-foreground/85",
+  list: "list-disc space-y-1.5 pl-5 text-[15px] leading-[26px] text-foreground/85 marker:text-muted-foreground",
   listOrdered:
-    "list-decimal space-y-1.5 pl-5 text-base leading-7 text-foreground/85 marker:text-muted-foreground",
-  listItem: "text-base leading-7 text-foreground/85",
+    "list-decimal space-y-1.5 pl-5 text-[15px] leading-[26px] text-foreground/85 marker:text-muted-foreground",
+  listItem: "text-[15px] leading-[26px] text-foreground/85",
   blockquote:
-    "rounded-r-lg border-l-2 border-brand-emerald-300 bg-brand-emerald-50/40 px-4 py-2.5 text-base leading-7 text-foreground/85 dark:bg-brand-emerald-500/10",
+    "rounded-r-lg border-l-2 border-brand-emerald-300 bg-brand-emerald-50/40 px-4 py-2.5 text-[15px] leading-[26px] text-foreground/85 dark:bg-brand-emerald-500/10",
   codeInline:
     "rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground/90",
   pre: "overflow-auto rounded-lg border border-border/60 bg-muted/50 p-3.5 text-sm leading-6 text-foreground/90",
