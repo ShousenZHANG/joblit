@@ -62,7 +62,7 @@ export function buildTechnicalSignals(description: string): TechnicalSignal[] {
 }
 
 function signalTone(): string {
-  return "border-brand-emerald-200 bg-brand-emerald-50 text-brand-emerald-800 dark:border-brand-emerald-500/30 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300";
+  return "border-brand-emerald-200/70 bg-background text-brand-emerald-800 dark:border-brand-emerald-500/30 dark:bg-brand-emerald-500/10 dark:text-brand-emerald-300";
 }
 
 type RequirementBlock = {
@@ -193,13 +193,13 @@ function ExperienceLine({
       data-classification="REQUIRED"
       data-relation-role={relationRole}
       className={cn(
-        "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg py-1",
+        "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg py-1",
         relationRole === "SUBSET" &&
           "ml-4 border-l border-brand-blue/25 pl-3 sm:ml-6",
       )}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="rounded-full border border-brand-blue/30 bg-brand-blue/10 px-2.5 py-1 text-sm font-bold leading-none tabular-nums text-foreground shadow-sm dark:bg-brand-blue/20">
+        <span className="text-2xl font-semibold leading-tight tracking-tight tabular-nums text-foreground">
           {requirement.years.text}
         </span>
         {requirement.scope ? (
@@ -216,7 +216,7 @@ function ExperienceLine({
         aria-live="polite"
         disabled={waiting}
         onClick={viewInJd}
-        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-lg px-2.5 text-xs font-semibold text-foreground outline-none transition-colors hover:bg-brand-blue/10 focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-75 sm:self-center motion-reduce:transition-none"
+        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-lg border border-border/70 bg-background/80 px-3 text-xs font-medium text-muted-foreground outline-none transition-colors hover:border-brand-blue/30 hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-75 sm:self-center motion-reduce:transition-none"
       >
         {waiting
           ? t("findingInJd")
@@ -262,10 +262,10 @@ export function JobRequirementsPanel({
     <section
       aria-labelledby={headingId}
       data-testid="jd-requirements-panel"
-      className="rounded-xl border border-border/70 bg-muted/20 p-4 @container"
+      className="@container"
     >
       <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-foreground/70 ring-1 ring-border/60">
+        <span className="flex size-5 items-center justify-center text-muted-foreground">
           <ListChecks className="h-4 w-4" aria-hidden />
         </span>
         <h3 id={headingId} className="text-sm font-semibold text-foreground">
@@ -273,9 +273,9 @@ export function JobRequirementsPanel({
         </h3>
       </div>
 
-      <div className="mt-3 grid min-w-0 gap-4 @lg:grid-cols-2">
+      <div className="mt-3 grid min-w-0 gap-3 @lg:grid-cols-2">
         {blocks.length ? (
-          <div className="min-w-0">
+          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.035] p-4">
             <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75">
               <CalendarClock
                 className="h-3.5 w-3.5 text-brand-blue"
@@ -284,9 +284,7 @@ export function JobRequirementsPanel({
               {t("experienceHeading")}
             </h4>
             <div
-              data-testid="jd-experience-row"
-              data-requirement-family="experience"
-              className="mt-1.5 min-w-0 space-y-2 border-l-2 border-brand-blue/35 pl-3"
+              className="mt-3 min-w-0 space-y-2"
             >
               {blocks.map((block) => (
                 <div
@@ -343,13 +341,14 @@ export function JobRequirementsPanel({
         {signals.length ? (
           <div
             className={cn(
-              blocks.length ? "min-w-0 border-t border-border/60 pt-3 @lg:border-l @lg:border-t-0 @lg:pl-4 @lg:pt-0" : "min-w-0 @lg:col-span-2",
+              "min-w-0 rounded-xl border border-border/70 bg-muted/30 p-4",
+              !blocks.length && "@lg:col-span-2",
             )}
           >
             <h4 className="text-xs font-semibold text-foreground/75">
               {t("technologyHeading")}
             </h4>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-2">
               {signals.map((signal) => (
                 <span
                   key={signal.skill}
@@ -358,7 +357,7 @@ export function JobRequirementsPanel({
                   aria-label={signal.skill}
                   title={signal.evidence}
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+                    "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium",
                     signalTone(),
                   )}
                 >

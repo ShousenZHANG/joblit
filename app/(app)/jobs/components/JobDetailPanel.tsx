@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import dynamic from "next/dynamic";
 import { useFormatter, useTranslations } from "next-intl";
-import { ArrowUpRight, ClipboardList, Sparkles, Trash2 } from "lucide-react";
+import { ArrowUpRight, ClipboardList, MapPin, Sparkles, Trash2 } from "lucide-react";
 import { externalJobUrl } from "@/lib/shared/canonicalizeJobUrl";
 import { useMarket } from "@/hooks/useMarket";
 import { Button } from "@/components/ui/button";
@@ -231,7 +231,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   // One height for every control at every status. The toolbar used to shrink
   // from h-10 to h-9 when a job was marked Applied, so choosing a status made
   // the row it lives in jump.
-  const actionHeight = cn("h-10", COARSE_POINTER_MIN_HEIGHT);
+  const actionHeight = cn("h-11 rounded-xl px-4 text-sm font-medium hover:translate-y-0 active:scale-[0.98] before:hidden", COARSE_POINTER_MIN_HEIGHT);
 
   const titleParts = useMemo(
     () => splitTitleQualifier(selectedJob?.title ?? ""),
@@ -323,38 +323,20 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-px bg-gradient-to-r from-transparent via-brand-emerald-400/70 to-transparent"
       />
 
-      <div className="relative border-b border-border/60 px-4 py-4 sm:px-6">
+      <div className="relative shrink-0 border-b border-border/70 bg-gradient-to-br from-muted/45 via-background to-background px-5 pb-5 pt-6 sm:px-7">
         {selectedJob ? (
           <div className="relative flex flex-col">
-            {/* Row 1 — who and where, then where it sits in the pipeline.
-                Company and location are the sentence people say about a job,
-                so they lead; the status is the one thing on this line the user
-                can change. */}
-            <div className="flex min-h-8 items-center justify-between gap-3">
-              <p className="min-w-0 text-sm leading-5 [overflow-wrap:anywhere]">
-                <span className="sr-only">{t("company")}: </span>
-                <span className="font-medium text-foreground/85">
-                  {visibleFact(selectedJob.company) ?? t("unknownCompany")}
+            {/* Employer identity and workflow status anchor the header. */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background text-base font-semibold text-foreground shadow-xs">
+                  {(visibleFact(selectedJob.company) ?? t("unknownCompany")).charAt(0).toUpperCase()}
                 </span>
-                {visibleFact(selectedJob.location) ? (
-                  <>
-                    <span
-                      aria-hidden
-                      className="mx-1.5 select-none text-foreground/25"
-                    >
-                      ·
-                    </span>
-                    <span className="sr-only">{t("location")}: </span>
-                    <span className="text-muted-foreground">
-                      {visibleFact(selectedJob.location)}
-                    </span>
-                  </>
-                ) : null}
-              </p>
-              {/* Still a Select — same role, same options, same keyboard
-                  behaviour — but stripped of the border, fill, shadow and
-                  fixed width that made a piece of state read as a form field
-                  waiting to be filled in. The dot carries the status. */}
+                <p className="min-w-0 text-sm font-semibold leading-5 text-foreground/80 [overflow-wrap:anywhere]">
+                  <span className="sr-only">{t("company")}: </span>
+                  {visibleFact(selectedJob.company) ?? t("unknownCompany")}
+                </p>
+              </div>
               <Select
                 value={statusPresentation?.status}
                 onValueChange={(v) =>
@@ -366,9 +348,9 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   size="sm"
                   aria-label={t("status")}
                   className={cn(
-                    "-mr-2 w-auto shrink-0 gap-1.5 rounded-md border-0 bg-transparent px-2 text-sm font-medium text-foreground/80 shadow-none",
+                    "h-9 w-auto shrink-0 gap-2 rounded-full border border-border/80 bg-background px-3 text-xs font-medium text-foreground/80 shadow-xs",
                     "hover:bg-muted/70 hover:text-foreground data-[state=open]:bg-muted/70",
-                    "dark:bg-transparent dark:hover:bg-muted/50",
+                    "dark:bg-background dark:hover:bg-muted/50",
                     "[&_svg]:size-3.5 [&_svg]:opacity-60",
                     COARSE_POINTER_MIN_HEIGHT,
                   )}
@@ -407,24 +389,31 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
             <h2
               ref={titleRef}
               tabIndex={-1}
-              className="mt-1 rounded-md text-balance text-xl font-semibold leading-tight tracking-tight text-foreground [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 sm:text-2xl"
+              className="mt-5 max-w-[30ch] rounded-md text-balance text-2xl font-semibold leading-[1.2] tracking-tight text-foreground [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 sm:text-[28px]"
             >
               {titleParts.main}
               {titleParts.qualifier ? (
                 <>
                   {" "}
-                  <span className="mt-0.5 block text-sm font-normal leading-5 tracking-normal text-muted-foreground">
+                  <span className="mt-2 block text-sm font-normal leading-5 tracking-normal text-muted-foreground">
                     {titleParts.qualifier}
                   </span>
                 </>
               ) : null}
             </h2>
 
+            {visibleFact(selectedJob.location) ? (
+              <p className="mt-3 flex items-start gap-1.5 text-sm leading-5 text-muted-foreground">
+                <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+                <span><span className="sr-only">{t("location")}: </span>{visibleFact(selectedJob.location)}</span>
+              </p>
+            ) : null}
+
             {/* Row 3 — the facts, uniformly quiet except the one people
                 compare postings on. Omitted entirely when nothing survives the
                 placeholder filter, so there is no orphan gap. */}
             {facts.length ? (
-              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm leading-5 text-muted-foreground">
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
                 {facts.map((fact, index) => (
                   <React.Fragment key={fact.key}>
                     {index > 0 ? (
@@ -444,14 +433,10 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
               </p>
             ) : null}
 
-            {/* Row 4 — one filled surface, and it is the action that moves an
-                application forward. Open job leaves the product, so it is the
-                cheapest-looking control on the row, and Remove stays neutral
-                until hover: the delete is a deferred commit behind an Undo
-                toast (useJobMutations). */}
+            {/* A dedicated action rail separates workflow from job facts. */}
             <div
               data-testid="job-primary-actions"
-              className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:gap-2"
+              className="mt-5 flex flex-wrap items-center gap-2 border-t border-border/60 pt-4"
             >
               {/* CN ships a single Chinese resume with no tailoring, so it gets
                   no entry point at all. */}
@@ -461,7 +446,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   data-testid="job-tailor-button"
                   onClick={() => onTailor(selectedJob, "resume")}
                   className={cn(
-                    "w-full justify-center sm:col-span-2 lg:w-auto",
+                    "min-w-[132px] flex-1 justify-center border border-brand-emerald-700/30 bg-brand-emerald-700 text-white shadow-[0_2px_4px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-brand-emerald-800 hover:shadow-sm sm:flex-none",
                     actionHeight,
                   )}
                 >
@@ -473,7 +458,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 <SavedDocumentButton
                   label={t("savedCv")}
                   href={selectedJob.resumePdfUrl}
-                  className={cn(actionHeight, "lg:w-auto")}
+                  className={cn(actionHeight, "sm:w-auto")}
                   onOpenTailor={
                     selectedJob.applicationId
                       ? () => onTailor(selectedJob, "resume")
@@ -485,7 +470,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 <SavedDocumentButton
                   label={t("savedCl")}
                   href={selectedJob.coverPdfUrl}
-                  className={cn(actionHeight, "lg:w-auto")}
+                  className={cn(actionHeight, "sm:w-auto")}
                   onOpenTailor={
                     selectedJob.applicationId
                       ? () => onTailor(selectedJob, "cover")
@@ -493,13 +478,13 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   }
                 />
               ) : null}
-              <div className="flex items-center gap-2 sm:col-span-2 lg:col-auto">
+              <div className="flex flex-1 items-center gap-2">
                 <Button
                   asChild
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   className={cn(
-                    "flex-1 justify-center text-foreground/80 hover:text-foreground lg:flex-none",
+                    "justify-center border-border bg-background text-foreground/80 shadow-xs hover:bg-muted/70 hover:text-foreground hover:shadow-xs",
                     actionHeight,
                   )}
                 >
@@ -524,7 +509,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     onDelete(selectedJob);
                   }}
                   className={cn(
-                    "size-10 shrink-0 text-foreground/55 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 lg:size-10",
+                    "ml-auto size-11 shrink-0 rounded-xl border border-transparent text-muted-foreground hover:translate-y-0 hover:shadow-none before:hidden hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50",
                     COARSE_POINTER_TARGET,
                   )}
                 >
@@ -572,26 +557,18 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         data-loading={showLoadingOverlay ? "true" : "false"}
         className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
       >
-        <div className="p-4 sm:p-6">
+        <div className="p-5 sm:p-7">
           {selectedJob ? (
-            <div className="space-y-4 text-sm text-muted-foreground">
-              {/* Label plus hairline rule. The emerald medallion that used to
-                  sit here was the loudest thing on the panel once the header
-                  stopped competing with it — a decorated tile announcing the
-                  section you were already reading. */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {t("jobDescriptionTitle")}
-                </span>
-                <span
-                  className="h-px flex-1 bg-gradient-to-r from-border to-transparent"
-                  aria-hidden
-                />
-              </div>
+            <div className="space-y-6 text-sm text-muted-foreground">
               <JobRequirementsPanel
                 experience={visibleExperience}
                 description={selectedDescription}
               />
+              <div className="flex items-center gap-3 border-t border-border/70 pt-6">
+                <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                  {t("jobDescriptionTitle")}
+                </h3>
+              </div>
               {detailError ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
                   <span>{detailError}</span>

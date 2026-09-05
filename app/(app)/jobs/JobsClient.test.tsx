@@ -1210,13 +1210,16 @@ describe("JobsClient", () => {
     expect(removeButton).not.toHaveAttribute("role", "menuitem");
   });
 
-  it("uses a responsive stacked primary action layout for mobile", async () => {
+  it("wraps the primary actions instead of overflowing a narrow panel", async () => {
     renderWithClient(
       <JobsClient initialItems={[baseJob]} initialCursor={null} />,
     );
 
+    // The mechanism has been a stacking grid and is now a wrapping flex row;
+    // what must hold either way is that the toolbar reflows rather than
+    // pushing the detail pane sideways on a phone.
     const actionRows = await screen.findAllByTestId("job-primary-actions");
-    expect(actionRows[0]).toHaveClass("grid", "grid-cols-1", "sm:grid-cols-2");
+    expect(actionRows[0]).toHaveClass("flex", "flex-wrap");
   });
 
   it("keeps deleted job hidden without triggering an unnecessary refetch", async () => {
