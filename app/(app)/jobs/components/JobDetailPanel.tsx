@@ -323,13 +323,13 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-px bg-gradient-to-r from-transparent via-brand-emerald-400/70 to-transparent"
       />
 
-      <div className="relative shrink-0 border-b border-border/70 bg-gradient-to-br from-muted/45 via-background to-background px-5 pb-5 pt-6 sm:px-7">
+      <div className="relative shrink-0 border-b border-border/70 bg-gradient-to-br from-muted/45 via-background to-background px-5 pb-4 pt-4 sm:px-7">
         {selectedJob ? (
           <div className="relative flex flex-col">
             {/* Employer identity and workflow status anchor the header. */}
             <div className="flex items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
-                <span aria-hidden className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border/80 bg-background text-base font-semibold text-foreground shadow-xs">
+                <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border/80 bg-background text-sm font-semibold text-foreground shadow-xs">
                   {(visibleFact(selectedJob.company) ?? t("unknownCompany")).charAt(0).toUpperCase()}
                 </span>
                 <p className="min-w-0 text-sm font-semibold leading-5 text-foreground/80 [overflow-wrap:anywhere]">
@@ -389,13 +389,13 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
             <h2
               ref={titleRef}
               tabIndex={-1}
-              className="mt-5 max-w-[30ch] rounded-md text-balance text-2xl font-semibold leading-[1.2] tracking-tight text-foreground [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 sm:text-[28px]"
+              className="mt-3.5 max-w-[34ch] rounded-md text-balance text-xl font-semibold leading-[1.25] tracking-tight text-foreground [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-600 focus-visible:ring-offset-2 sm:text-2xl"
             >
               {titleParts.main}
               {titleParts.qualifier ? (
                 <>
                   {" "}
-                  <span className="mt-2 block text-sm font-normal leading-5 tracking-normal text-muted-foreground">
+                  <span className="mt-1.5 block text-sm font-normal leading-5 tracking-normal text-muted-foreground">
                     {titleParts.qualifier}
                   </span>
                 </>
@@ -436,7 +436,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
             {/* A dedicated action rail separates workflow from job facts. */}
             <div
               data-testid="job-primary-actions"
-              className="mt-5 flex flex-wrap items-center gap-2 border-t border-border/60 pt-4"
+              className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3.5"
             >
               {/* CN ships a single Chinese resume with no tailoring, so it gets
                   no entry point at all. */}
@@ -557,14 +557,14 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         data-loading={showLoadingOverlay ? "true" : "false"}
         className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
       >
-        <div className="p-5 sm:p-7">
+        <div className="px-5 pb-10 pt-5 sm:px-7">
           {selectedJob ? (
-            <div className="space-y-6 text-sm text-muted-foreground">
+            <div className="space-y-5 text-sm text-muted-foreground">
               <JobRequirementsPanel
                 experience={visibleExperience}
                 description={selectedDescription}
               />
-              <div className="flex items-center gap-3 border-t border-border/70 pt-6">
+              <div className="flex items-center gap-3 border-t border-border/70 pt-5">
                 <h3 className="text-sm font-semibold tracking-tight text-foreground">
                   {t("jobDescriptionTitle")}
                 </h3>
@@ -591,7 +591,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   <Skeleton className="h-4 w-3/4" />
                 </div>
               ) : (
-                <div className="max-w-[75ch] text-foreground/85 [overflow-wrap:anywhere]">
+                <div className="max-w-[68ch] text-foreground/85 [overflow-wrap:anywhere]">
                   {selectedDescription ? (
                     <JobDescriptionMarkdown
                       description={selectedDescription}

@@ -16,32 +16,34 @@ import { experienceEvidenceTargetId } from "./jobExperienceEvidenceTarget";
 // instead of riding in the jobs-list critical path. Imported via next/dynamic
 // from JobDetailPanel.
 /**
- * One type scale for the description, aligned to the panel around it.
+ * The description is the document, and it sets the scale.
  *
- * Body was 15px while every control, chip and label on the same pane is 13-14,
- * so the description read as though the page had been zoomed. The steps are
- * 14 / 16 / 20: body and subheadings share a size and separate on weight,
- * section headings take the one step up, and nothing else competes.
+ * This block had been pulled down to 14px to match the chrome around it, which
+ * got the relationship backwards: the panel exists to show a job ad, and the
+ * ad was rendered at the size of the buttons framing it. Body copy is 16px
+ * over a 28px line, the size long-form text is set at when someone is expected
+ * to read rather than scan it, on a measure short enough to stay readable.
  *
- * Section rules are gone. A hairline above every `##` cut a job ad into six
- * boxed fragments; spacing does the same grouping without drawing a line the
- * content did not ask for.
+ * Steps are 16 / 18 and nothing else competes. Subheadings share the body size
+ * and separate on weight; section headings take the one step up. Section rules
+ * are gone — a hairline above every `##` cut a job ad into boxed fragments,
+ * and the space above each heading already groups them.
  */
 const markdownStyles = {
-  heading: "mt-6 text-base font-semibold text-foreground first:mt-0",
-  subheading: "mt-4 text-sm font-semibold text-foreground",
-  paragraph: "text-sm leading-6 text-foreground/85",
-  list: "list-disc space-y-1 pl-5 text-sm leading-6 text-foreground/85 marker:text-muted-foreground",
+  heading: "mt-7 text-lg font-semibold tracking-tight text-foreground first:mt-0",
+  subheading: "mt-5 text-base font-semibold text-foreground",
+  paragraph: "text-base leading-7 text-foreground/85",
+  list: "list-disc space-y-1.5 pl-5 text-base leading-7 text-foreground/85 marker:text-muted-foreground",
   listOrdered:
-    "list-decimal space-y-1 pl-5 text-sm leading-6 text-foreground/85 marker:text-muted-foreground",
-  listItem: "text-sm leading-6 text-foreground/85",
+    "list-decimal space-y-1.5 pl-5 text-base leading-7 text-foreground/85 marker:text-muted-foreground",
+  listItem: "text-base leading-7 text-foreground/85",
   blockquote:
-    "rounded-r-lg border-l-2 border-brand-emerald-300 bg-brand-emerald-50/40 px-4 py-2 text-sm leading-6 text-foreground/85 dark:bg-brand-emerald-500/10",
+    "rounded-r-lg border-l-2 border-brand-emerald-300 bg-brand-emerald-50/40 px-4 py-2.5 text-base leading-7 text-foreground/85 dark:bg-brand-emerald-500/10",
   codeInline:
-    "rounded bg-muted px-1.5 py-0.5 font-mono text-[13px] text-foreground/90",
-  pre: "overflow-auto rounded-lg border border-border/60 bg-muted/50 p-3 text-[13px] leading-6 text-foreground/90",
+    "rounded bg-muted px-1.5 py-0.5 font-mono text-sm text-foreground/90",
+  pre: "overflow-auto rounded-lg border border-border/60 bg-muted/50 p-3.5 text-sm leading-6 text-foreground/90",
   link: "text-brand-emerald-text underline underline-offset-4 decoration-brand-emerald-300 hover:decoration-current",
-  table: "w-full border-collapse text-[13px]",
+  table: "w-full border-collapse text-sm",
   th: "border border-border/60 bg-muted/50 px-3 py-2 text-left font-semibold text-foreground",
   td: "border border-border/60 px-3 py-2 text-foreground/85",
 };
@@ -318,7 +320,7 @@ export function JobDescriptionMarkdown({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight, experienceHighlightPlugin]}

@@ -199,7 +199,7 @@ function ExperienceLine({
       )}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="text-xl font-semibold leading-none tracking-tight tabular-nums text-foreground">
+        <span className="text-lg font-semibold leading-none tracking-tight tabular-nums text-foreground">
           {requirement.years.text}
         </span>
         {requirement.scope ? (
@@ -273,9 +273,9 @@ export function JobRequirementsPanel({
         </h3>
       </div>
 
-      <div className="mt-3 grid min-w-0 gap-3 @lg:grid-cols-2">
+      <div className="mt-2.5 grid min-w-0 gap-2.5 @lg:grid-cols-2">
         {blocks.length ? (
-          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.035] p-3.5">
+          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.035] p-3">
             <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75">
               <CalendarClock
                 className="h-3.5 w-3.5 text-brand-blue"
@@ -341,7 +341,7 @@ export function JobRequirementsPanel({
         {signals.length ? (
           <div
             className={cn(
-              "min-w-0 rounded-xl border border-border/70 bg-muted/30 p-3.5",
+              "min-w-0 rounded-xl border border-border/70 bg-muted/30 p-3",
               !blocks.length && "@lg:col-span-2",
             )}
           >
