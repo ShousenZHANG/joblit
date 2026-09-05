@@ -14,7 +14,6 @@ export type JobListQuery = {
   cursor?: string;
   status?: JobStatusValue;
   q?: string;
-  jobLevel?: string;
   sort: "newest" | "oldest";
   /** Locale-backed Jobs workspace. AU and CN remain strictly isolated. */
   market?: Market;
@@ -53,7 +52,6 @@ export type JobListResult = {
   nextCursor: string | null;
   totalCount: number;
   etag: string;
-  facets: { jobLevels: string[] };
 };
 
 type JobWhereClause = Exclude<
@@ -62,7 +60,7 @@ type JobWhereClause = Exclude<
 >;
 
 function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
-  const { status, q, jobLevel, market } = query;
+  const { status, q, market } = query;
   const andClauses: JobWhereClause[] = [];
 
   if (q) {
@@ -73,10 +71,6 @@ function buildWhereClause(userId: string, query: JobListQuery): JobWhereClause {
         { location: { contains: q, mode: "insensitive" } },
       ],
     });
-  }
-
-  if (jobLevel) {
-    andClauses.push({ jobLevel: { equals: jobLevel, mode: "insensitive" } });
   }
 
   return {
@@ -210,19 +204,10 @@ export async function listJobs(
 
   const { items, nextCursor } = getCursorPage(normalized, limit);
 
-  const jobLevels = Array.from(
-    new Set(
-      items
-        .map((job) => job.jobLevel)
-        .filter((level): level is string => Boolean(level)),
-    ),
-  );
-
   const filtersSignature = [
     `limit=${limit}`,
     `status=${query.status ?? "ALL"}`,
     `q=${query.q ?? ""}`,
-    `jobLevel=${query.jobLevel ?? ""}`,
     `sort=${sort}`,
     `market=${query.market ?? ""}`,
   ].join("|");
@@ -232,7 +217,6 @@ export async function listJobs(
     cursor: cursor ?? null,
     nextCursor,
     filtersSignature,
-    jobLevels,
     items: items.map((job) => ({
       id: job.id,
       status: job.status,
@@ -250,6 +234,5 @@ export async function listJobs(
     nextCursor,
     totalCount,
     etag,
-    facets: { jobLevels },
   };
 }

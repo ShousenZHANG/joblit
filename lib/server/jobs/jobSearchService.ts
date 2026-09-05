@@ -16,7 +16,7 @@ export async function listJobsWithRelevance(
   userId: string,
   query: JobListQuery,
 ): Promise<JobListResult> {
-  const { q, limit, cursor, status, market, jobLevel } = query;
+  const { q, limit, cursor, status, market } = query;
   if (!q) throw new Error("listJobsWithRelevance requires q parameter");
 
   const escaped = escapeLikePattern(q);
@@ -38,8 +38,6 @@ export async function listJobsWithRelevance(
     );
     conditions.push(Prisma.sql`j."market" IN (${Prisma.join(visibleMarkets)})`);
   }
-  if (jobLevel)
-    conditions.push(Prisma.sql`LOWER(j."jobLevel") = LOWER(${jobLevel})`);
 
   const whereClause = Prisma.join(conditions, " AND ");
   const cursorClause = cursor
@@ -176,19 +174,11 @@ export async function listJobsWithRelevance(
   });
   const nextCursor = hasMore ? (items[items.length - 1]?.id ?? null) : null;
 
-  const jobLevels = Array.from(
-    new Set(
-      items.map((j) => j.jobLevel).filter((l): l is string => Boolean(l)),
-    ),
-  );
-
   const { sort } = query;
   const filtersSignature = [
     `limit=${limit}`,
     `status=${status ?? "ALL"}`,
     `q=${q}`,
-    `location=${location ?? ""}`,
-    `jobLevel=${jobLevel ?? ""}`,
     `sort=${sort}`,
     `market=${market ?? ""}`,
   ].join("|");
@@ -198,7 +188,6 @@ export async function listJobsWithRelevance(
     cursor: cursor ?? null,
     nextCursor,
     filtersSignature,
-    jobLevels,
     items: items.map((j) => ({
       id: j.id,
       status: j.status,
@@ -216,6 +205,5 @@ export async function listJobsWithRelevance(
     nextCursor,
     totalCount,
     etag,
-    facets: { jobLevels },
   };
 }

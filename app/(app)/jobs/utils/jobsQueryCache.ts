@@ -6,7 +6,7 @@ const JOBS_QUERY_KEY = ["jobs"] as const;
 
 // One infinite query per filter (queryString). Pages are nested under
 // `data.pages`; `data.pageParams[0]` is always `null` (the first page is
-// fetched with no cursor). totalCount/facets live on page 0.
+// fetched with no cursor). totalCount lives on page 0.
 export type JobsInfiniteData = InfiniteData<JobsResponse, string | null>;
 
 export function getJobsListQueryKey(queryString: string) {
@@ -40,16 +40,6 @@ export function invalidateActiveJobsQueries(queryClient: QueryClient) {
 
 function getJobsQueryEntries(queryClient: QueryClient) {
   return queryClient.getQueryCache().findAll({ queryKey: JOBS_QUERY_KEY });
-}
-
-function getJobLevels(items: JobItem[]) {
-  return Array.from(
-    new Set(
-      items
-        .map((item) => item.jobLevel)
-        .filter((level): level is string => Boolean(level)),
-    ),
-  );
 }
 
 function decrementCount(count: number | undefined, by: number) {
@@ -94,7 +84,6 @@ export function buildInitialJobsInfiniteData({
       {
         items: initialItems,
         nextCursor: initialCursor,
-        facets: { jobLevels: getJobLevels(initialItems) },
       },
     ],
     pageParams: [null],

@@ -57,7 +57,6 @@ export const jobsListResponseSchema = z.object({
   items: z.array(jobListItemSchema),
   nextCursor: z.string().nullable(),
   totalCount: z.number().optional(),
-  facets: z.object({ jobLevels: z.array(z.string()).optional() }).optional(),
 });
 
 const jobDetailWireResponseSchema = z

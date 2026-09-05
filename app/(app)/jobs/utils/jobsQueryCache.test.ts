@@ -107,7 +107,6 @@ describe("jobs query cache helpers", () => {
         {
           items: [baseJob, { ...baseJob, id: "2", jobLevel: "Senior" }],
           nextCursor: null,
-          facets: { jobLevels: ["Mid", "Senior"] },
         },
       ],
       pageParams: [null],

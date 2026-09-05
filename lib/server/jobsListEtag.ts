@@ -15,7 +15,6 @@ type BuildJobsListEtagInput = {
   cursor: string | null;
   nextCursor: string | null;
   filtersSignature: string;
-  jobLevels: string[];
   items: EtagJobItem[];
   totalCount?: number;
 };
@@ -40,13 +39,11 @@ export function buildJobsListEtag(input: BuildJobsListEtagInput): string {
       ].join(":"),
     )
     .join("|");
-  const levelsSignature = input.jobLevels.join("|");
   const payload = [
     input.userId,
     input.cursor ?? "start",
     input.nextCursor ?? "end",
     input.filtersSignature,
-    levelsSignature,
     itemsSignature,
     String(input.totalCount ?? -1),
   ].join("::");

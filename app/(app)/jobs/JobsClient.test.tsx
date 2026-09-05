@@ -135,7 +135,6 @@ beforeEach(() => {
         JSON.stringify({
           items: [baseJob],
           nextCursor: null,
-          facets: { jobLevels: ["Mid"] },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -145,7 +144,6 @@ beforeEach(() => {
         JSON.stringify({
           items: [baseJob],
           nextCursor: null,
-          facets: { jobLevels: ["Mid"] },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -727,7 +725,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: deleted ? [] : [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -737,7 +734,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: deleted ? [] : [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -802,7 +798,6 @@ describe("JobsClient", () => {
     client.setQueryData(["jobs", "limit=10&sort=newest", null], {
       items: [oldJob],
       nextCursor: null,
-      facets: { jobLevels: ["Mid"] },
     });
 
     render(
@@ -841,7 +836,6 @@ describe("JobsClient", () => {
                 JSON.stringify({
                   items: [page2Job],
                   nextCursor: null,
-                  facets: { jobLevels: ["Mid"] },
                 }),
                 {
                   status: 200,
@@ -853,7 +847,6 @@ describe("JobsClient", () => {
               JSON.stringify({
                 items: [page1Job],
                 nextCursor: "55555555-5555-5555-5555-555555555555",
-                facets: { jobLevels: ["Mid"] },
               }),
               { status: 200, headers: { "Content-Type": "application/json" } },
             );
@@ -1049,7 +1042,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1059,7 +1051,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1120,7 +1111,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1130,7 +1120,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1241,7 +1230,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1253,7 +1241,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1312,7 +1299,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1608,7 +1594,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1675,7 +1660,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1743,7 +1727,6 @@ describe("JobsClient", () => {
           JSON.stringify({
             items: [baseJob],
             nextCursor: null,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -1818,7 +1801,6 @@ describe("JobsClient", () => {
       items: [firstJob, secondJob],
       nextCursor: null,
       totalCount: 2,
-      facets: { jobLevels: ["Mid"] },
     };
 
     const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
@@ -1953,12 +1935,10 @@ describe("JobsClient", () => {
       items: (typeof baseJob)[];
       nextCursor: string | null;
       totalCount?: number;
-      facets?: { jobLevels?: string[] };
     }>(newFilterKey, {
       items: [baseJob],
       nextCursor: null,
       totalCount: 1,
-      facets: { jobLevels: ["Mid"] },
     });
 
     const mockFetch = vi.fn(async (input: RequestInfo, init?: RequestInit) => {
@@ -1969,7 +1949,6 @@ describe("JobsClient", () => {
             items: [baseJob],
             nextCursor: null,
             totalCount: 1,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -2054,7 +2033,6 @@ describe("JobsClient", () => {
         items: Array<{ id: string; status: string }>;
         nextCursor: string | null;
         totalCount?: number;
-        facets?: { jobLevels?: string[] };
       }>;
       pageParams: Array<string | null>;
     }>(appliedFilterKey, {
@@ -2063,7 +2041,6 @@ describe("JobsClient", () => {
           items: [appliedOnlyJob],
           nextCursor: null,
           totalCount: 5,
-          facets: { jobLevels: ["Mid"] },
         },
       ],
       pageParams: [null],
@@ -2077,7 +2054,6 @@ describe("JobsClient", () => {
             items: [baseJob],
             nextCursor: null,
             totalCount: 1,
-            facets: { jobLevels: ["Mid"] },
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
@@ -2236,7 +2212,6 @@ describe("JobsClient", () => {
                 items: [reviewJobA, reviewJobB],
                 nextCursor: null,
                 totalCount: 2,
-                facets: { jobLevels: ["Mid"] },
               }),
               { status: 200, headers: { "Content-Type": "application/json" } },
             );
@@ -2352,7 +2327,6 @@ describe("JobsClient", () => {
                 items: remaining,
                 nextCursor: null,
                 totalCount: remaining.length,
-                facets: { jobLevels: ["Mid"] },
               }),
               { status: 200, headers: { "Content-Type": "application/json" } },
             );
@@ -2495,7 +2469,6 @@ describe("JobsClient", () => {
                 items: virtualJobs,
                 nextCursor: null,
                 totalCount: virtualJobs.length,
-                facets: { jobLevels: ["Mid"] },
               }),
               { status: 200, headers: { "Content-Type": "application/json" } },
             );

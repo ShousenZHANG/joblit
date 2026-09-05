@@ -8,7 +8,6 @@ describe("buildJobsListEtag", () => {
       cursor: null,
       nextCursor: null,
       filtersSignature: "q=frontend|status=ALL|sort=newest|limit=10",
-      jobLevels: ["Mid", "Senior"],
       items: [
         {
           id: "job-1",
@@ -32,7 +31,6 @@ describe("buildJobsListEtag", () => {
       cursor: null,
       nextCursor: null,
       filtersSignature: "q=frontend|status=ALL|sort=newest|limit=10",
-      jobLevels: ["Mid", "Senior"],
       items: [
         {
           id: "job-1",
@@ -60,7 +58,6 @@ describe("buildJobsListEtag", () => {
       cursor: null,
       nextCursor: null,
       filtersSignature: "q=frontend|status=ALL|sort=newest|limit=10",
-      jobLevels: ["Mid", "Senior"],
       items: [
         {
           id: "job-1",
@@ -84,7 +81,6 @@ describe("buildJobsListEtag", () => {
       cursor: null,
       nextCursor: null,
       filtersSignature: "q=frontend|status=ALL|sort=newest|limit=10",
-      jobLevels: ["Mid", "Senior"],
       items: [
         {
           id: "job-1",
@@ -112,7 +108,6 @@ describe("buildJobsListEtag", () => {
       cursor: null,
       nextCursor: null,
       filtersSignature: "q=frontend|status=ALL|sort=newest|limit=10",
-      jobLevels: ["Mid", "Senior"],
       items: [
         {
           id: "job-1",
@@ -130,7 +125,6 @@ describe("buildJobsListEtag", () => {
       cursor: null,
       nextCursor: null,
       filtersSignature: "q=frontend|status=ALL|sort=newest|limit=10",
-      jobLevels: ["Mid", "Senior"],
       items: [
         {
           id: "job-1",

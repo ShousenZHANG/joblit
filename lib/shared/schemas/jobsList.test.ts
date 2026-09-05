@@ -80,15 +80,13 @@ describe("jobsListResponseSchema", () => {
     ).toBe(false);
   });
 
-  it("carries the optional facets and total through", () => {
+  it("carries the optional total through", () => {
     const parsed = jobsListResponseSchema.parse({
       items: [],
       nextCursor: "cursor-1",
       totalCount: 42,
-      facets: { jobLevels: ["Mid", "Senior"] },
     });
     expect(parsed.totalCount).toBe(42);
-    expect(parsed.facets?.jobLevels).toEqual(["Mid", "Senior"]);
   });
 });
 

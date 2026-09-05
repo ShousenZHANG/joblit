@@ -91,7 +91,6 @@ async function JobsListSection({
         items,
         nextCursor: result.nextCursor,
         totalCount: result.totalCount,
-        facets: result.facets,
       },
     ],
     pageParams: [null],
