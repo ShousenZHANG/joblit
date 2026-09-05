@@ -57,8 +57,6 @@ import { TailorDialog } from "./components/tailoring/TailorDialog";
 import { JobDetailPanel } from "./components/JobDetailPanel";
 import { cn } from "@/lib/utils";
 import {
-  AU_LOCATION_OPTIONS,
-  CN_LOCATION_OPTIONS,
   getUserTimeZone,
 } from "./utils/constants";
 import type { JobsUrlState } from "./utils/jobsUrlState";
@@ -154,8 +152,6 @@ export function JobsClient({
     setQ,
     statusFilter,
     setStatusFilter,
-    locationFilter,
-    setLocationFilter,
     market,
     queryString,
     urlState,
@@ -327,10 +323,7 @@ export function JobsClient({
       ? "query"
       : null;
 
-  const activeFilterCount = [
-    locationFilter !== "ALL",
-    statusFilter !== "NEW",
-  ].filter(Boolean).length;
+  const activeFilterCount = [statusFilter !== "NEW"].filter(Boolean).length;
 
   function triggerSearch() {
     invalidateJobsQueries(queryClient);
@@ -608,37 +601,7 @@ export function JobsClient({
               </div>
 
               {mobileFiltersOpen && (
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-border/60 bg-muted/40 p-2.5">
-                  <Select
-                    value={locationFilter}
-                    onValueChange={(v) => {
-                      startTransition(() => {
-                        setLocationFilter(v);
-                      });
-                    }}
-                  >
-                    <SelectTrigger
-                      className={cn(mobileFilterSelectTriggerClass, "gap-1.5")}
-                      aria-label={t("location")}
-                    >
-                      <MapPin
-                        className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                        aria-hidden
-                      />
-                      <SelectValue placeholder={tc("allLocations")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
-                      {(market === "CN"
-                        ? CN_LOCATION_OPTIONS
-                        : AU_LOCATION_OPTIONS
-                      ).map((loc) => (
-                        <SelectItem key={loc.value} value={loc.value}>
-                          {loc.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5">
                   <Select
                     value={statusFilter}
                     onValueChange={(v) => {
@@ -759,50 +722,14 @@ export function JobsClient({
                     <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-brand-emerald-500 to-transparent" />
                   </div>
                 ) : null}
-                <div className="flex flex-col gap-2">
-                  <div className="min-w-0">
-                    <JobSearchBar
-                      q={q}
-                      onQueryChange={setQ}
-                      onSubmit={triggerSearch}
-                      placeholder={t("placeholder")}
-                      isDebouncing={q !== "" && q !== debouncedQ}
-                    />
-                  </div>
-                  <Select
-                    value={locationFilter}
-                    onValueChange={(v) => {
-                      startTransition(() => {
-                        setLocationFilter(v);
-                      });
-                    }}
-                  >
-                    <SelectTrigger
-                      data-testid="jobs-location-filter"
-                      className={cn(
-                        desktopFilterSelectTriggerClass,
-                        "w-full gap-1.5",
-                      )}
-                      aria-label={t("location")}
-                    >
-                      <MapPin
-                        className="h-4 w-4 shrink-0 text-muted-foreground"
-                        aria-hidden
-                      />
-                      <SelectValue placeholder={tc("allLocations")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">{tc("allLocations")}</SelectItem>
-                      {(market === "CN"
-                        ? CN_LOCATION_OPTIONS
-                        : AU_LOCATION_OPTIONS
-                      ).map((loc) => (
-                        <SelectItem key={loc.value} value={loc.value}>
-                          {loc.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="min-w-0">
+                  <JobSearchBar
+                    q={q}
+                    onQueryChange={setQ}
+                    onSubmit={triggerSearch}
+                    placeholder={t("placeholder")}
+                    isDebouncing={q !== "" && q !== debouncedQ}
+                  />
                 </div>
               </div>
               {/* The status choice IS the results header. The old layout spent
@@ -1017,7 +944,6 @@ export function JobsClient({
                               onClick={() =>
                                 startTransition(() => {
                                   setStatusFilter("NEW");
-                                  setLocationFilter("ALL");
                                   setQ("");
                                 })
                               }

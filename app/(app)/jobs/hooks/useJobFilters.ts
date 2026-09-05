@@ -22,16 +22,9 @@ import {
 const SORT_ORDER = "newest" as const;
 
 function getFilterStateKey(
-  state: Pick<
-    JobsUrlState,
-    "q" | "statusFilter" | "locationFilter"
-  >,
+  state: Pick<JobsUrlState, "q" | "statusFilter">,
 ) {
-  return JSON.stringify([
-    state.q,
-    state.statusFilter,
-    state.locationFilter,
-  ]);
+  return JSON.stringify([state.q, state.statusFilter]);
 }
 
 export function useJobFilters() {
@@ -57,9 +50,6 @@ export function useJobFilters() {
   const [statusFilter, setStatusFilterState] = useState<JobStatus>(
     () => urlState.statusFilter,
   );
-  const [locationFilter, setLocationFilterState] = useState(
-    () => urlState.locationFilter,
-  );
   const pageSize = 10;
 
   const wrapUserSetter = useCallback(
@@ -75,10 +65,6 @@ export function useJobFilters() {
     () => wrapUserSetter(setStatusFilterState),
     [wrapUserSetter],
   );
-  const setLocationFilter = useMemo(
-    () => wrapUserSetter(setLocationFilterState),
-    [wrapUserSetter],
-  );
 
   useEffect(() => {
     latestParamsRef.current = searchParamsString;
@@ -89,7 +75,6 @@ export function useJobFilters() {
     urlSyncTargetRef.current = nextFilterKey;
     setQState(urlState.q);
     setStatusFilterState(urlState.statusFilter);
-    setLocationFilterState(urlState.locationFilter);
   }, [searchParamsString, urlState]);
 
   const replaceUrlState = useCallback(
@@ -135,8 +120,8 @@ export function useJobFilters() {
   );
 
   const filters = useMemo(
-    () => ({ statusFilter, locationFilter, market, pageSize }),
-    [statusFilter, locationFilter, market, pageSize],
+    () => ({ statusFilter, market, pageSize }),
+    [statusFilter, market, pageSize],
   );
   const debouncedSelectFilters = useDebouncedValue(filters, 120);
   const debouncedQ = useDebouncedValue(q, 250);
@@ -154,9 +139,6 @@ export function useJobFilters() {
     sp.set("limit", String(debouncedFilters.pageSize));
     sp.set("status", debouncedFilters.statusFilter);
     if (debouncedFilters.q.trim()) sp.set("q", debouncedFilters.q.trim());
-    if (debouncedFilters.locationFilter !== "ALL") {
-      sp.set("location", debouncedFilters.locationFilter);
-    }
     sp.set("market", debouncedFilters.market);
     sp.set("sort", SORT_ORDER);
     return sp.toString();
@@ -166,7 +148,6 @@ export function useJobFilters() {
     const nextFilterState = {
       q: debouncedFilters.q.trim(),
       statusFilter: debouncedFilters.statusFilter,
-      locationFilter: debouncedFilters.locationFilter,
     };
     const nextFilterKey = getFilterStateKey(nextFilterState);
     const urlSyncTarget = urlSyncTargetRef.current;
@@ -182,8 +163,6 @@ export function useJobFilters() {
     setQ,
     statusFilter,
     setStatusFilter,
-    locationFilter,
-    setLocationFilter,
     pageSize,
     market,
     queryString,

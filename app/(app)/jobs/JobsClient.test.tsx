@@ -272,7 +272,7 @@ describe("JobsClient", () => {
   it("restores filters from the URL and debounces canonical URL updates", async () => {
     const user = userEvent.setup();
     navigationMock.search =
-      "utm=campaign&q=react&status=APPLIED&location=state%3AVIC";
+      "utm=campaign&q=react&status=APPLIED";
 
     renderWithClient(
       <JobsClient initialItems={[baseJob]} initialCursor={null} />,
@@ -280,9 +280,6 @@ describe("JobsClient", () => {
 
     const search = screen.getAllByRole("textbox")[0];
     expect(search).toHaveValue("react");
-    expect(screen.getByTestId("jobs-location-filter")).toHaveTextContent(
-      "Victoria",
-    );
     expect(
       screen.getByRole("radio", { name: messages.jobs.statusApplied }),
     ).toHaveAttribute("aria-checked", "true");
@@ -292,7 +289,7 @@ describe("JobsClient", () => {
 
     await waitFor(() => {
       expect(navigationMock.replace).toHaveBeenLastCalledWith(
-        "/jobs?utm=campaign&status=APPLIED&location=state%3AVIC",
+        "/jobs?utm=campaign&status=APPLIED",
         { scroll: false },
       );
     });
@@ -544,15 +541,16 @@ describe("JobsClient", () => {
     expect(navigationMock.replace).not.toHaveBeenCalled();
   });
 
-  it("keeps the desktop toolbar to one search-plus-location row", () => {
+  it("keeps the desktop toolbar to the search row alone", () => {
     renderWithClient(
       <JobsClient initialItems={[baseJob]} initialCursor={null} />,
     );
 
-    const locationTrigger = screen.getAllByTestId("jobs-location-filter")[0];
-    expect(locationTrigger).toBeInTheDocument();
-    // The level filter is gone — with a feed this small, slicing it by
-    // seniority was a control without a use case.
+    // Location joined the level filter in retirement: Job.location is the
+    // posting's own free text, so a fixed option list matched by luck.
+    expect(
+      screen.queryByTestId("jobs-location-filter"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("jobs-level-filter")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /enter selection mode/i }),

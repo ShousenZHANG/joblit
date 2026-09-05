@@ -4,7 +4,6 @@ import { isJobStatus, toActiveJobStatus } from "@/lib/shared/jobStatus";
 export type JobsUrlState = {
   q: string;
   statusFilter: JobStatus;
-  locationFilter: string;
   selectedId: string | null;
   view: "list" | "detail";
 };
@@ -12,7 +11,6 @@ export type JobsUrlState = {
 const URL_KEYS = {
   q: "q",
   statusFilter: "status",
-  locationFilter: "location",
   selectedId: "job",
   view: "view",
 } as const satisfies Record<keyof JobsUrlState, string>;
@@ -20,7 +18,6 @@ const URL_KEYS = {
 const DEFAULTS: JobsUrlState = {
   q: "",
   statusFilter: "NEW",
-  locationFilter: "ALL",
   selectedId: null,
   view: "list",
 };
@@ -36,7 +33,6 @@ export function parseJobsUrlState(params: URLSearchParams): JobsUrlState {
     statusFilter: isJobStatus(status)
       ? toActiveJobStatus(status)
       : DEFAULTS.statusFilter,
-    locationFilter: params.get(URL_KEYS.locationFilter) || DEFAULTS.locationFilter,
     selectedId: params.get(URL_KEYS.selectedId),
     view: view === "detail" ? "detail" : DEFAULTS.view,
   };

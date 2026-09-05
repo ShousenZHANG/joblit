@@ -15,40 +15,6 @@ export const HIGHLIGHT_KEYWORDS = [
   "Pinecone", "Weaviate", "Snowflake", "Databricks", "Airflow", "dbt",
 ];
 
-/**
- * Values are the `state:` keys `lib/server/jobs/jobLocationScope.ts` expands
- * into the aliases a posting actually carries — `state:NSW` becomes
- * ["NSW", "New South Wales", "Sydney", "Newcastle", "Wollongong"].
- *
- * Job.location is the source posting's own string (FetchRun Job intake writes
- * `item.location` verbatim), so a literal "New South Wales, Australia" never
- * matched a row reading "Sydney, AU". The filter looked useless because it was
- * returning nothing, not because the scope was already narrow.
- */
-export const AU_LOCATION_OPTIONS = [
-  { value: "state:NSW", label: "New South Wales" },
-  { value: "state:VIC", label: "Victoria" },
-  { value: "state:QLD", label: "Queensland" },
-  { value: "state:WA", label: "Western Australia" },
-  { value: "state:SA", label: "South Australia" },
-  { value: "state:ACT", label: "ACT" },
-  { value: "state:TAS", label: "Tasmania" },
-  { value: "state:NT", label: "Northern Territory" },
-];
-
-export const CN_LOCATION_OPTIONS = [
-  { value: "Beijing", label: "北京" },
-  { value: "Shanghai", label: "上海" },
-  { value: "Shenzhen", label: "深圳" },
-  { value: "Guangzhou", label: "广州" },
-  { value: "Hangzhou", label: "杭州" },
-  { value: "Chengdu", label: "成都" },
-  { value: "Nanjing", label: "南京" },
-  { value: "Wuhan", label: "武汉" },
-  { value: "Suzhou", label: "苏州" },
-  { value: "Xi'an", label: "西安" },
-];
-
 export function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -6,13 +6,12 @@ describe("jobsUrlState", () => {
     expect(
       parseJobsUrlState(
         new URLSearchParams(
-          "q=react&status=APPLIED&location=Sydney&job=j2&view=detail",
+          "q=react&status=APPLIED&job=j2&view=detail",
         ),
       ),
     ).toEqual({
       q: "react",
       statusFilter: "APPLIED",
-      locationFilter: "Sydney",
       selectedId: "j2",
       view: "detail",
     });
@@ -24,7 +23,6 @@ describe("jobsUrlState", () => {
     ).toEqual({
       q: "",
       statusFilter: "NEW",
-      locationFilter: "ALL",
       selectedId: null,
       view: "list",
     });
@@ -35,7 +33,6 @@ describe("jobsUrlState", () => {
       writeJobsUrlState(new URLSearchParams("utm=x"), {
         q: "",
         statusFilter: "NEW",
-        locationFilter: "ALL",
         selectedId: null,
         view: "list",
       }).toString(),
