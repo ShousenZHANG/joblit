@@ -599,3 +599,55 @@ describe("TailorDialog", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+
+describe("TailorDialog interaction protection", () => {
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it("keeps the document and dialog in place during generation", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+    renderHarness();
+    await user.click(screen.getByRole("button", { name: "open" }));
+    await user.click(generateButton());
+    expect(screen.getByRole("tab", { name: messages.tailor.docCover })).toBeDisabled();
+    expect(screen.getByText(messages.tailor.dialog.generatePreparing)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("flushes pending edits before closing", async () => {
+    const user = userEvent.setup();
+    const calls = await openSavedDraft(user);
+    const originalFetch = globalThis.fetch;
+    let resolveSave!: (response: Response) => void;
+    let savedBody = "";
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo, init?: RequestInit) => {
+      if (String(input).endsWith("/draft")) {
+        savedBody = String(init?.body);
+        return new Promise<Response>((resolve) => { resolveSave = resolve; });
+      }
+      return originalFetch(input, init);
+    }));
+    await user.click(screen.getByRole("button", { name: "Add Go" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(JSON.parse(savedBody).aiContent.cv.skillsSelection.userSelection).toBeDefined();
+    resolveSave(json({ aiContentHash: "saved-hash", publication: PUBLICATION_DRAFT }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(calls.some((call) => call.url.includes("/finalize"))).toBe(false);
+  });
+
+  it("keeps edits visible if closing cannot save them", async () => {
+    const user = userEvent.setup();
+    await openSavedDraft(user);
+    vi.stubGlobal("fetch", vi.fn(async () => json({ error: { code: "SAVE_FAILED", message: "Save unavailable" } }, 503)));
+    await user.click(screen.getByRole("button", { name: "Add Go" }));
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Save unavailable");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove Go" })).toBeInTheDocument();
+  });
+});

@@ -132,7 +132,7 @@ export function SkillsSelectionPanel({
           <button
             type="button"
             onClick={() => selection && onChange({ ...selection, userSelection: undefined })}
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex [@media(any-pointer:coarse)]:min-h-11 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <RotateCcw className="h-3 w-3" aria-hidden />
             {t("resetSelection")}
@@ -201,10 +201,10 @@ function SkillChip({
       aria-label={ariaLabel}
       aria-pressed={selected}
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+        "inline-flex [@media(any-pointer:coarse)]:min-h-11 items-center gap-1 rounded-full px-2.5 py-1 text-xs transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
         selected
           ? "bg-brand-emerald-50 font-medium text-brand-emerald-text ring-1 ring-brand-emerald-200 hover:bg-brand-emerald-100 dark:bg-brand-emerald-500/10"
-          : "border border-dashed border-border text-muted-foreground/70 hover:border-solid hover:text-foreground",
+          : "border border-dashed border-border text-muted-foreground hover:border-solid hover:text-foreground",
         disabled && "pointer-events-none opacity-50",
       )}
     >

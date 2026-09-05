@@ -1,12 +1,15 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Loader2, Sparkles } from "lucide-react";
+import { Check, FileText, Loader2, ShieldCheck, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TailorTarget } from "./tailorActions";
 
 interface TailorGeneratePanelProps {
   target: TailorTarget;
+  hasContent: boolean;
+  disabled: boolean;
+  stage: "generate" | "import" | "publish";
   onGenerate: () => void;
   generating: boolean;
   /** Live stage line while the chain runs; null when idle. */
@@ -36,6 +39,9 @@ interface TailorGeneratePanelProps {
  */
 export function TailorGeneratePanel({
   target,
+  hasContent,
+  disabled,
+  stage,
   onGenerate,
   generating,
   status,
@@ -47,42 +53,66 @@ export function TailorGeneratePanel({
   outputCopied,
 }: TailorGeneratePanelProps) {
   const t = useTranslations("tailor.dialog");
+  const stages = ["generate", "import", "publish"] as const;
+  const activeStage = stages.indexOf(stage);
+  const action = (
+    <Button
+      type="button"
+      disabled={generating || disabled}
+      onClick={onGenerate}
+      data-guide-anchor={target === "resume" ? "generate_first_pdf" : undefined}
+      className="min-h-11 w-full rounded-xl bg-brand-emerald-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-700 disabled:bg-muted disabled:text-muted-foreground sm:w-auto motion-reduce:transition-none"
+    >
+      {generating ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : <Sparkles className="size-4" aria-hidden />}
+      {generating ? t("generateRunning") : t("generateLocally")}
+    </Button>
+  );
   return (
-    <section className="mb-5 rounded-2xl border border-brand-emerald-500/30 bg-brand-emerald-500/5 px-4 py-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          type="button"
-          size="sm"
-          disabled={generating}
-          onClick={onGenerate}
-          data-guide-anchor={target === "resume" ? "generate_first_pdf" : undefined}
-          className="h-9 rounded-full bg-brand-emerald-500 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-600 disabled:bg-muted disabled:text-muted-foreground motion-reduce:transition-none"
-        >
-          {generating ? (
-            <>
-              <Loader2 className="h-4 w-4 motion-safe:animate-spin" aria-hidden />
-              {t("generateRunning")}
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" aria-hidden />
-              {t("generateLocally")}
-            </>
-          )}
-        </Button>
-        <p
-          role="status"
-          aria-live="polite"
-          className="text-xs text-muted-foreground"
-        >
-          {generating && status ? status : t("generateHint")}
-        </p>
-      </div>
+    <section aria-label={t("generateLocally")} className="mb-4 overflow-hidden rounded-2xl border border-brand-emerald-500/25 bg-gradient-to-br from-brand-emerald-500/5 via-background to-background">
+      {hasContent && !generating && !error ? (
+        <details className="group px-4 py-3">
+          <summary className="cursor-pointer rounded-lg py-2 text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">{t("regenerateTitle")}</summary>
+          <p className="mb-3 mt-1 text-sm leading-relaxed text-muted-foreground">{t("regenerateBody")}</p>
+          {action}
+        </details>
+      ) : (
+        <div className="p-5 sm:p-6">
+          <div className="flex items-start gap-4">
+            <div aria-hidden className="hidden size-14 shrink-0 items-center justify-center rounded-2xl border border-brand-emerald-500/20 bg-background text-brand-emerald-600 shadow-sm sm:flex">
+              <FileText className="size-7" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-semibold tracking-tight text-foreground">{t(target === "resume" ? "resumeReadyTitle" : "coverReadyTitle")}</h3>
+              <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted-foreground">{t(target === "resume" ? "resumeReadyBody" : "coverReadyBody")}</p>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            {action}
+            <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="size-3.5" aria-hidden />{t("generateHint")}</span>
+          </div>
+        </div>
+      )}
+      {generating ? (
+        <div className="border-t border-brand-emerald-500/20 bg-background/60 px-5 py-4 sm:px-6">
+          <ol className="grid grid-cols-3 gap-2" aria-label={t("progressLabel")}>
+            {stages.map((item, index) => (
+              <li key={item} aria-current={index === activeStage ? "step" : undefined} className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <span className={`flex size-6 shrink-0 items-center justify-center rounded-full ${index <= activeStage ? "bg-brand-emerald-600 text-white" : "bg-muted text-muted-foreground"}`}>
+                  {index < activeStage ? <Check className="size-3.5" aria-hidden /> : index + 1}
+                </span>
+                <span>{t(item === "generate" ? "progressGenerate" : item === "import" ? "progressImport" : "progressPublish")}</span>
+              </li>
+            ))}
+          </ol>
+          <p role="status" aria-live="polite" className="mt-3 text-sm font-medium text-foreground">{status ?? t("generatePreparing")}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t("keepOpen")}</p>
+        </div>
+      ) : null}
 
       {error ? (
         <div
           role="alert"
-          className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+          className="m-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300"
         >
           <p>{offline ? t("generatorOffline") : error}</p>
           {rescuableOutput ? (
@@ -91,14 +121,14 @@ export function TailorGeneratePanel({
                 type="button"
                 onClick={onRetryOutput}
                 disabled={generating}
-                className="font-medium underline underline-offset-4 disabled:no-underline disabled:opacity-60"
+                className="min-h-11 rounded-lg px-2 font-medium underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:no-underline disabled:opacity-60"
               >
                 {t("generateRetryImport")}
               </button>
               <button
                 type="button"
                 onClick={onCopyOutput}
-                className="font-medium underline underline-offset-4"
+                className="min-h-11 rounded-lg px-2 font-medium underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {outputCopied ? t("generateOutputCopied") : t("generateCopyOutput")}
               </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { FileText, Mail } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TailorTarget } from "./tailorActions";
 
@@ -80,12 +81,13 @@ function TargetTab({
       onClick={() => onSelect(item)}
       onKeyDown={onKeyDown}
       className={cn(
-        "inline-flex min-h-11 min-w-11 touch-manipulation items-center rounded-full px-4 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none",
+        "inline-flex min-h-11 min-w-0 flex-1 touch-manipulation items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none",
         active
-          ? "bg-foreground text-background"
+          ? "bg-background text-foreground shadow-sm ring-1 ring-border/60"
           : "text-muted-foreground hover:text-foreground",
       )}
     >
+      {item === "resume" ? <FileText className="size-4 shrink-0" aria-hidden /> : <Mail className="size-4 shrink-0" aria-hidden />}
       {label}
       {indicator ? (
         <span
@@ -119,7 +121,7 @@ function TargetTabList({
       role="tablist"
       aria-label={label}
       aria-orientation="horizontal"
-      className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background p-1"
+      className="sticky top-0 z-10 flex w-full items-center gap-1 rounded-xl bg-muted p-1"
     >
       {TARGETS.map((item) => (
         <TargetTab

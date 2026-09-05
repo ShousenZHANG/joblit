@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { Check } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type TailorStepState = "expanded" | "done" | "future";
@@ -44,13 +44,18 @@ export function TailorStep({
 }: TailorStepProps) {
   const sectionRef = useRef<HTMLElement | null>(null);
   const expanded = state === "expanded";
+  const previousExpandedRef = useRef(expanded);
+  const headingRef = useRef<HTMLHeadingElement | null>(null);
 
   useEffect(() => {
-    if (!expanded) return;
+    const wasExpanded = previousExpandedRef.current;
+    previousExpandedRef.current = expanded;
+    if (!expanded || wasExpanded) return;
+    headingRef.current?.focus({ preventScroll: true });
     const node = sectionRef.current;
     // jsdom leaves scrollIntoView unimplemented.
     if (node && typeof node.scrollIntoView === "function") {
-      node.scrollIntoView({ behavior: "smooth", block: "start" });
+      node.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "nearest" });
     }
   }, [expanded]);
 
@@ -58,15 +63,15 @@ export function TailorStep({
     <section
       ref={sectionRef}
       data-phase-state={state}
-      className="scroll-mt-2 border-t border-border/60 first:border-t-0"
+      className="scroll-mt-20 rounded-xl border border-border/70 bg-background px-4"
     >
       {expanded ? (
-        <div className="flex gap-3.5 py-5">
+        <div className="flex gap-2.5 py-4 sm:gap-3.5">
           <PhaseBadge state={state} index={index} className="mt-0.5" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                <h3 ref={headingRef} tabIndex={-1} className="rounded text-sm font-semibold tracking-tight text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   {title}
                 </h3>
                 {description ? (
@@ -77,7 +82,7 @@ export function TailorStep({
               </div>
               {action ? <div className="shrink-0">{action}</div> : null}
             </div>
-            {children ? <div className="mt-3.5">{children}</div> : null}
+            {children ? <div className="mt-3.5 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">{children}</div> : null}
           </div>
         </div>
       ) : (
@@ -129,9 +134,10 @@ function CollapsedRow({
           type="button"
           onClick={onExpand}
           aria-expanded={false}
-          className="flex min-w-0 flex-1 items-center gap-3.5 rounded-lg text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-3.5 rounded-lg text-left transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
         >
           {row}
+          <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
         </button>
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-3.5">{row}</div>

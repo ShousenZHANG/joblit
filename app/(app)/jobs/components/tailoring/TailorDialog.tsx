@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject, type ReactElement } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 import type { JobItem } from "../../types";
 import { getErrorMessage } from "../../types";
@@ -28,6 +29,8 @@ import type {
   TailorReviewDraft,
   TailorReviewFinalized,
 } from "./tailorDialogTypes";
+import type { TailoringEditSession } from "./useTailoringEditSession";
+import { useUnsavedChangesGuard } from "./useUnsavedChangesGuard";
 import { useTailorImport } from "./useTailorImport";
 
 export interface TailorImportedInput {
@@ -65,12 +68,19 @@ export function TailorDialog({
   onImported,
   onFinalized,
 }: TailorDialogProps): ReactElement {
+  const closeRef = useRef<(() => void) | null>(null);
   return (
-    <Dialog open={!!job} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(92vh,860px)] w-[min(96vw,760px)] max-w-[760px] flex-col gap-0 overflow-hidden p-0">
+    <Dialog open={!!job} onOpenChange={(open) => {
+      if (open) onOpenChange(true);
+      else if (closeRef.current) closeRef.current();
+      else onOpenChange(false);
+    }}>
+      <DialogContent onPointerDownOutside={(event) => event.preventDefault()} className="flex max-h-[92dvh] w-[calc(100%-1.5rem)] max-w-[880px] flex-col gap-0 overflow-hidden rounded-3xl border-border/70 p-0 shadow-2xl sm:max-w-[880px]">
         {job ? (
           <TailorDialogBody
             key={job.id}
+            closeRef={closeRef}
+            onClose={() => onOpenChange(false)}
             job={job}
             initialTarget={initialTarget}
             draft={draft}
@@ -86,6 +96,8 @@ export function TailorDialog({
 }
 
 interface TailorDialogBodyProps {
+  closeRef: RefObject<(() => void) | null>;
+  onClose: () => void;
   job: JobItem;
   initialTarget: TailorTarget;
   draft: TailorReviewDraft | null;
@@ -96,6 +108,8 @@ interface TailorDialogBodyProps {
 }
 
 function TailorDialogBody({
+  closeRef,
+  onClose,
   job,
   initialTarget,
   draft,
@@ -106,6 +120,9 @@ function TailorDialogBody({
 }: TailorDialogBodyProps): ReactElement {
   const t = useTranslations("tailor.dialog");
   const td = useTranslations("tailor");
+  const [livePublication, setLivePublication] = useState<ApplicationPublication | null>(null);
+  const editSessionRef = useRef<TailoringEditSession | null>(null);
+  const [editState, setEditState] = useState({ busy: false, unsaved: false });
   const [target, setTarget] = useState<TailorTarget>(initialTarget);
   // null means "derive the expanded phase from the document's state"; a value
   // is the phase the user explicitly re-opened. Every successful action clears
@@ -135,11 +152,11 @@ function TailorDialogBody({
   const [rescuable, setRescuable] = useState<string | null>(null);
   const [rescuableCopied, setRescuableCopied] = useState(false);
 
-  function handleFinalized(result: TailorReviewFinalized) {
+  const handleFinalized = useCallback((result: TailorReviewFinalized) => {
     setPublishedTargets((current) => ({ ...current, [result.target]: true }));
     setPhaseOverrides((current) => ({ ...current, [result.target]: null }));
     onFinalized(result);
-  }
+  }, [onFinalized]);
 
   // The half of the chain that runs against the server: import the JSON, then
   // publish it. Split out because a refused import is often transient — a rate
@@ -196,11 +213,8 @@ function TailorDialogBody({
       } finally {
         setAutoStage(null);
       }
-      // handleFinalized is a hoisted declaration recreated each render; naming
-      // it here would rebuild this callback every render for no gain.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [importer, job.id, onImported, t, target, toast],
+    [handleFinalized, importer, job.id, onImported, t, target, toast],
   );
 
   // One click, one outcome: generate, import and publish as a single chain, so
@@ -267,12 +281,29 @@ function TailorDialogBody({
             ? t("generateRepairing", { code: sidecar.progress.code })
             : null;
 
-  const publication = draft?.initialPublication ?? null;
+  const generating = sidecar.running || autoStage !== null;
+  useUnsavedChangesGuard(generating || !!rescuable);
+  useEffect(() => {
+    closeRef.current = () => {
+      if (generating) {
+        toast({ title: t("keepOpen"), duration: 3000 });
+        return;
+      }
+      const session = editSessionRef.current;
+      if (session) void session.saveAndExit(onClose);
+      else onClose();
+    };
+    return () => { closeRef.current = null; };
+  }, [closeRef, generating, onClose, t, toast]);
+
+  const publication = livePublication ?? draft?.initialPublication ?? null;
   const importedFor = (forTarget: TailorTarget) =>
     publication ? publication[forTarget].status !== "MISSING" : false;
   const publishedFor = (forTarget: TailorTarget) =>
-    publishedTargets[forTarget] ||
-    (publication ? publication[forTarget].status === "FINAL" : false);
+    livePublication
+      ? livePublication[forTarget].status === "FINAL"
+      : publishedTargets[forTarget] ||
+        (publication ? publication[forTarget].status === "FINAL" : false);
 
   const hasContent = importedFor(target);
   const autoPhase: TailorPhase | "none" = publishedFor(target)
@@ -296,19 +327,21 @@ function TailorDialogBody({
 
   return (
     <>
-      <DialogHeader className="shrink-0 space-y-1 border-b border-border/60 px-6 py-4 text-left">
-        <DialogTitle className="text-base font-semibold tracking-tight">
+      <DialogHeader className="shrink-0 space-y-2 border-b border-border/60 bg-muted/20 px-5 py-5 pr-14 text-left sm:px-7 sm:pr-16">
+        <DialogTitle className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
+          <Sparkles className="size-5 text-brand-emerald-600" aria-hidden />
           {t("title")}
         </DialogTitle>
-        <DialogDescription className="truncate text-xs">
+        <DialogDescription className="line-clamp-2 text-sm leading-relaxed" title={[job.title, job.company].filter(Boolean).join(" · ")}>
           {[job.title, job.company].filter(Boolean).join(" · ")}
         </DialogDescription>
       </DialogHeader>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-5 sm:px-7 sm:pb-7">
         <DocumentTargetTabs
           target={target}
           onSelect={setTarget}
+          disabled={generating || editState.busy || !!rescuable}
           label={td("docTablistLabel")}
           labels={{ resume: td("docResume"), cover: td("docCover") }}
           indicators={{
@@ -327,9 +360,12 @@ function TailorDialogBody({
             ) : null}
 
             <TailorGeneratePanel
+              hasContent={hasContent}
+              disabled={draftLoading || editState.busy || editState.unsaved}
+              stage={autoStage === "publishing" ? "publish" : autoStage === "importing" ? "import" : "generate"}
               target={target}
               onGenerate={() => void generateLocally()}
-              generating={sidecar.running || autoStage !== null}
+              generating={generating}
               status={generateStatus}
               error={sidecar.error ?? importer.importError}
               offline={sidecar.offline}
@@ -350,6 +386,10 @@ function TailorDialogBody({
               // still holding the pre-import snapshot would autosave it back
               // over the document that was just imported.
               <TailorDraftSteps
+                sessionRef={editSessionRef}
+                onPublicationChange={setLivePublication}
+                onEditStateChange={setEditState}
+                disabled={generating}
                 key={`${draft.applicationId}:${draft.initialAiContentHash ?? ""}`}
                 draft={draft}
                 target={target}

@@ -53,7 +53,7 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
               onClick={() =>
                 onChange({ ...summary, userEdit: undefined, accepted: true })
               }
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <RotateCcw className="h-3 w-3" aria-hidden />
               {t("resetToAi")}
@@ -75,7 +75,7 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
           })
         }
         rows={4}
-        className="w-full resize-y rounded-xl border border-border/70 bg-background px-3 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400/40"
+        className="w-full resize-y rounded-xl border border-border/70 bg-background px-4 py-3 text-base leading-relaxed sm:text-sm text-foreground placeholder:text-muted-foreground/60 focus-visible:border-brand-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-emerald-400/40"
         placeholder={t("summary.placeholder")}
         aria-label={t("summary.aria")}
       />
@@ -85,7 +85,7 @@ export function SummarySection({ summary, onChange }: SummarySectionProps) {
           <button
             type="button"
             onClick={() => setShowDiff((visible) => !visible)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             aria-expanded={showDiff}
           >
             <ChevronDown

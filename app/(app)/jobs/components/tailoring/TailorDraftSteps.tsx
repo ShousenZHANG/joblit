@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { useTranslations } from "next-intl";
 import { ExternalLink, Loader2, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { ApplicationPublication } from "@/lib/shared/applicationPublication";
 import type { AiContent } from "@/lib/shared/schemas/aiContent";
 import { ConflictDialog } from "./ConflictDialog";
 import { CoverParagraphsSection } from "./CoverParagraphsSection";
@@ -24,6 +25,10 @@ import {
 } from "./useTailoringEditSession";
 
 interface TailorDraftStepsProps {
+  onPublicationChange: (publication: ApplicationPublication) => void;
+  sessionRef: RefObject<TailoringEditSession | null>;
+  onEditStateChange: (state: { busy: boolean; unsaved: boolean }) => void;
+  disabled: boolean;
   draft: TailorReviewDraft;
   target: TailorTarget;
   expandedPhase: TailorPhase | "none";
@@ -41,6 +46,10 @@ type PdfUrls = Record<TailorTarget, string | null>;
  * target would drop pending edits on every tab switch.
  */
 export function TailorDraftSteps({
+  sessionRef,
+  onPublicationChange,
+  onEditStateChange,
+  disabled,
   draft,
   target,
   expandedPhase,
@@ -50,6 +59,14 @@ export function TailorDraftSteps({
   const t = useTranslations("tailor.dialog");
   const td = useTranslations("tailor");
   const session = useTailorSession(draft, target);
+  useEffect(() => {
+    sessionRef.current = session;
+    return () => { sessionRef.current = null; };
+  }, [session, sessionRef]);
+  useEffect(() => { onPublicationChange(session.document.publication); }, [session.document.publication, onPublicationChange]);
+  const busy = session.busy.finalizing || session.busy.discarding || session.busy.exiting;
+  const unsaved = session.content.saveStatus.kind !== "saved";
+  useEffect(() => { onEditStateChange({ busy, unsaved }); }, [busy, unsaved, onEditStateChange]);
   const [pdfUrls, setPdfUrls] = useState<PdfUrls>(() => ({
     resume: draft.resumePdfUrl,
     cover: draft.coverPdfUrl,
@@ -86,14 +103,21 @@ export function TailorDraftSteps({
     });
   }
 
-  if (!hasContent) return <TailorLockedSteps />;
+  if (!hasContent) return (
+    <>
+      {session.issue.message ? (
+        <p role="alert" className="mb-4 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{session.issue.message}</p>
+      ) : null}
+      <TailorLockedSteps />
+    </>
+  );
 
   const pdfLink = pdfUrls[target] ? (
     <a
       href={pdfUrls[target] ?? undefined}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-emerald-text underline-offset-4 hover:underline"
+      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-brand-emerald-text underline-offset-4 hover:underline"
     >
       <ExternalLink className="h-3.5 w-3.5" aria-hidden />
       {t("openPdf")}
@@ -101,7 +125,7 @@ export function TailorDraftSteps({
   ) : null;
 
   return (
-    <>
+    <fieldset disabled={disabled || busy} className="min-w-0 space-y-3 border-0 p-0">
       {session.issue.message ? (
         <div
           role="alert"
@@ -135,7 +159,7 @@ export function TailorDraftSteps({
               type="button"
               onClick={() => void session.discard()}
               disabled={session.busy.discarding || session.busy.finalizing}
-              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
             >
               <RotateCcw className="h-3 w-3" aria-hidden />
               {session.busy.discarding ? t("discarding") : t("discard")}
@@ -153,6 +177,9 @@ export function TailorDraftSteps({
             }
           />
         )}
+        <div className="mt-5 flex justify-end border-t border-border/60 pt-4">
+          <Button type="button" onClick={() => onExpandPhase("publish")} className="min-h-11 rounded-xl">{t("continuePublish")}</Button>
+        </div>
       </TailorStep>
 
       <TailorStep
@@ -169,7 +196,7 @@ export function TailorDraftSteps({
             size="sm"
             disabled={session.busy.finalizing || session.busy.discarding}
             onClick={() => void publish()}
-            className="h-9 rounded-full bg-brand-emerald-500 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-600 disabled:bg-muted disabled:text-muted-foreground motion-reduce:transition-none"
+            className="h-11 rounded-xl bg-brand-emerald-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-emerald-700 disabled:bg-muted disabled:text-muted-foreground motion-reduce:transition-none"
           >
             {session.busy.finalizing ? (
               <>
@@ -191,7 +218,7 @@ export function TailorDraftSteps({
           onOverwrite={() => window.location.reload()}
         />
       ) : null}
-    </>
+    </fieldset>
   );
 }
 
