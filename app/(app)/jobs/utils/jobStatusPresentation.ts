@@ -22,6 +22,14 @@ export type JobStatusPresentation = {
   badgeClass: string;
   /** Badge classes for the detail header — ringed, tuned for a larger surface. */
   headerClass: string;
+  /**
+   * The detail header states the status as a coloured dot beside the word,
+   * not as a filled badge: the header's job is to name the role, and a second
+   * tinted block there competed with the one action the panel exists for.
+   * A dot needs a solid fill rather than the bg/text/ring triple above, so it
+   * carries its own class — bound to the same hue by the presentation test.
+   */
+  dotClass: string;
 };
 
 const PRESENTATIONS: Record<ActiveJobStatusValue, JobStatusPresentation> = {
@@ -37,6 +45,7 @@ const PRESENTATIONS: Record<ActiveJobStatusValue, JobStatusPresentation> = {
     headerClass:
       "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200 " +
       "dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/30",
+    dotClass: "bg-emerald-500 dark:bg-emerald-400",
   },
   APPLIED: {
     status: "APPLIED",
@@ -47,6 +56,7 @@ const PRESENTATIONS: Record<ActiveJobStatusValue, JobStatusPresentation> = {
     headerClass:
       "bg-sky-100 text-sky-800 ring-1 ring-sky-200 " +
       "dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-400/30",
+    dotClass: "bg-sky-500 dark:bg-sky-400",
   },
   REJECTED: {
     status: "REJECTED",
@@ -57,6 +67,7 @@ const PRESENTATIONS: Record<ActiveJobStatusValue, JobStatusPresentation> = {
     headerClass:
       "bg-rose-100 text-rose-800 ring-1 ring-rose-200 " +
       "dark:bg-rose-500/15 dark:text-rose-300 dark:ring-rose-400/30",
+    dotClass: "bg-rose-500 dark:bg-rose-400",
   },
 };
 

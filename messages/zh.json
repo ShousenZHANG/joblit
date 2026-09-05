@@ -156,7 +156,12 @@
     "unknownCompany": "未知公司",
     "unknownTime": "未知",
     "retry": "重试",
-    "tailorAction": "定制"
+    "tailorAction": "定制",
+    "jobTypeFulltime": "全职",
+    "jobTypeParttime": "兼职",
+    "jobTypeContract": "合同制",
+    "jobTypeInternship": "实习",
+    "jobTypeTemporary": "临时"
   },
   "fetch": {
     "searchRoles": "搜索职位",

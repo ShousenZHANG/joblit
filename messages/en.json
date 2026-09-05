@@ -156,7 +156,12 @@
     "unknownCompany": "Unknown",
     "unknownTime": "unknown",
     "retry": "Retry",
-    "tailorAction": "Tailor"
+    "tailorAction": "Tailor",
+    "jobTypeFulltime": "Full time",
+    "jobTypeParttime": "Part time",
+    "jobTypeContract": "Contract",
+    "jobTypeInternship": "Internship",
+    "jobTypeTemporary": "Temporary"
   },
   "fetch": {
     "searchRoles": "Search roles",

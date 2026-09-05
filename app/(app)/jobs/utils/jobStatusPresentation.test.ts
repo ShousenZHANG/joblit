@@ -9,6 +9,7 @@ describe("jobStatusPresentation", () => {
       expect(["NEW", "APPLIED", "REJECTED"]).toContain(presentation.status);
       expect(presentation.badgeClass).not.toBe("");
       expect(presentation.headerClass).not.toBe("");
+      expect(presentation.dotClass).toMatch(/\S/);
     }
   });
 
@@ -32,6 +33,10 @@ describe("jobStatusPresentation", () => {
       const family = (klass: string) =>
         klass.match(/\b(emerald|sky|rose)\b/)?.[1] ?? null;
       expect(family(presentation.badgeClass)).toBe(family(presentation.headerClass));
+      // The detail header's status control is a dot, not a filled badge, so it
+      // carries its own class — and it has to name the same hue, or one Job
+      // would be emerald in the list and sky in the header it opens.
+      expect(family(presentation.badgeClass)).toBe(family(presentation.dotClass));
       expect(family(presentation.badgeClass)).not.toBeNull();
     }
   });
