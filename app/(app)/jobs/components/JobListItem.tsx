@@ -5,6 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { COARSE_POINTER_MIN_HEIGHT } from "@/components/ui/touchTarget";
 import { useFormatter, useNow, useTranslations } from "next-intl";
 import { type JobItem } from "../types";
+import { MapPin } from "lucide-react";
+import { jobTypeLabelKey, sentenceCase } from "../utils/jobFactLabels";
+import { splitTitleQualifier } from "../utils/splitTitleQualifier";
 import { jobStatusPresentation } from "../utils/jobStatusPresentation";
 
 /**
@@ -51,6 +54,11 @@ function JobListItemInner({
   const format = useFormatter();
   const now = useNow();
 
+  const titleParts = splitTitleQualifier(job.title);
+  const rawType = meaningful(job.jobType);
+  const typeKey = jobTypeLabelKey(rawType);
+  const typeLabel = rawType ? (typeKey ? t(typeKey) : sentenceCase(rawType)) : null;
+  const level = meaningful(job.jobLevel);
   const companyName = job.company || t("unknownCompany");
   const listLabel = t("listItemAria", { title: job.title, company: companyName });
 
@@ -74,12 +82,12 @@ function JobListItemInner({
       className="w-full"
     >
       <div
-        className={`joblit-list-item flex w-full items-start gap-0 rounded-2xl border border-l-4 border-border/60 bg-background/80 text-left backdrop-blur-sm transition-[background-color,border-color,box-shadow,transform] duration-[180ms] ease-out hover:-translate-y-[1px] motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
+        className={`joblit-list-item flex w-full items-start gap-0 rounded-xl border border-l-4 text-left transition-[background-color,border-color,box-shadow,transform] duration-[180ms] ease-out motion-reduce:transition-none ${
           isActive
-            ? "border-l-brand-emerald-500 bg-brand-emerald-50/50 shadow-sm"
+            ? "border-brand-emerald-200 border-l-brand-emerald-500 bg-brand-emerald-50/60 dark:border-brand-emerald-500/30 dark:border-l-brand-emerald-400 dark:bg-brand-emerald-500/10"
             : // Signal lock: hovering a row lights its left edge emerald. The
               // 4px left border is always present, so this costs zero layout.
-              "border-l-transparent hover:border-border hover:border-l-brand-emerald-500/70 hover:bg-background"
+              "bg-background border-border/60 border-l-transparent hover:border-border hover:border-l-brand-emerald-500/70 hover:bg-background"
         }`}
       >
         <button
@@ -89,10 +97,10 @@ function JobListItemInner({
           data-perf="cv-auto"
           tabIndex={isActive ? 0 : -1}
           aria-current={isActive ? "true" : undefined}
-          className={`min-w-0 flex-1 cursor-pointer px-3 py-3 text-left ${COARSE_POINTER_MIN_HEIGHT}`}
+          className={`min-w-0 flex-1 cursor-pointer rounded-lg px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-emerald-600 ${COARSE_POINTER_MIN_HEIGHT}`}
         >
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <Badge className={jobStatusPresentation(job.status).badgeClass}>
                 {t(jobStatusPresentation(job.status).labelKey)}
               </Badge>
@@ -123,19 +131,28 @@ function JobListItemInner({
               ) : null}
             </div>
             <span
-              className="text-xs text-muted-foreground"
+              className="shrink-0 text-xs tabular-nums text-muted-foreground"
               title={exactCreatedAt}
             >
               {relativeCreatedAt}
             </span>
           </div>
-          <div className="mt-2 text-sm font-semibold">{job.title}</div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {job.company ?? "-"} - {job.location ?? "-"}
+          <div className="mt-2 text-sm font-semibold leading-5 text-foreground [overflow-wrap:anywhere]">
+            {titleParts.main}
+            {titleParts.qualifier ? (
+              <span className="mt-1 block text-xs font-normal leading-4 text-muted-foreground">{titleParts.qualifier}</span>
+            ) : null}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
-            {meaningful(job.jobType) ? <span>{meaningful(job.jobType)}</span> : null}
-            {meaningful(job.jobLevel) ? <span>· {meaningful(job.jobLevel)}</span> : null}
+          <div className="mt-2 text-xs font-medium text-foreground/80">{companyName}</div>
+          {meaningful(job.location) ? (
+            <div className="mt-1 flex items-start gap-1 text-xs leading-4 text-muted-foreground">
+              <MapPin className="mt-0.5 size-3 shrink-0" aria-hidden />
+              <span>{job.location}</span>
+            </div>
+          ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            {typeLabel ? <span>{typeLabel}</span> : null}
+            {level ? <span>{typeLabel ? "· " : ""}{sentenceCase(level)}</span> : null}
             {job.workArrangement ? (
               <span className="rounded-full bg-brand-emerald-50 px-1.5 py-0.5 font-medium text-brand-emerald-text ring-1 ring-brand-emerald-100">
                 {job.workArrangement}

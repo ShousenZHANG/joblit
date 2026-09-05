@@ -193,12 +193,12 @@ function ExperienceLine({
       data-classification="REQUIRED"
       data-relation-role={relationRole}
       className={cn(
-        "flex min-w-0 flex-col gap-1 rounded-lg py-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3",
+        "flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg py-1",
         relationRole === "SUBSET" &&
           "ml-4 border-l border-brand-blue/25 pl-3 sm:ml-6",
       )}
     >
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
         <span className="rounded-full border border-brand-blue/30 bg-brand-blue/10 px-2.5 py-1 text-sm font-bold leading-none tabular-nums text-foreground shadow-sm dark:bg-brand-blue/20">
           {requirement.years.text}
         </span>
@@ -262,7 +262,7 @@ export function JobRequirementsPanel({
     <section
       aria-labelledby={headingId}
       data-testid="jd-requirements-panel"
-      className="rounded-2xl border border-border/70 bg-background/70 p-4 shadow-sm"
+      className="rounded-xl border border-border/70 bg-muted/20 p-4 @container"
     >
       <div className="flex items-center gap-2">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-foreground/70 ring-1 ring-border/60">
@@ -273,100 +273,102 @@ export function JobRequirementsPanel({
         </h3>
       </div>
 
-      {blocks.length ? (
-        <div className="mt-3">
-          <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75">
-            <CalendarClock
-              className="h-3.5 w-3.5 text-brand-blue"
-              aria-hidden
-            />
-            {t("experienceHeading")}
-          </h4>
-          <div
-            data-testid="jd-experience-row"
-            data-requirement-family="experience"
-            className="mt-1.5 min-w-0 space-y-2 border-l-2 border-brand-blue/35 pl-3"
-          >
-            {blocks.map((block) => (
-              <div
-                key={block.key}
-                role={block.relation ? "group" : undefined}
-                aria-label={
-                  block.relation
-                    ? t(
-                        block.relation === "ANY_OF"
-                          ? "relationAnyOfLabel"
-                          : "relationAllOfLabel",
-                      )
-                    : undefined
-                }
-                className="space-y-1"
-              >
-                {block.requirements.map((requirement, index) => {
-                  const relation = requirement.relation as
-                    ExtendedRelation | undefined;
-                  const relationRole = relation?.role;
-                  const connectorKey =
-                    relationRole === "SUBSET"
-                      ? "relationIncludes"
-                      : index > 0 && block.relation === "ANY_OF"
-                        ? "relationAnyOf"
-                        : index > 0 && block.relation === "ALL_OF"
-                          ? "relationAllOf"
-                          : null;
-                  return (
-                    <Fragment key={requirement.id}>
-                      {connectorKey ? (
-                        <span
-                          className={cn(
-                            "inline-flex text-xs font-medium text-muted-foreground",
-                            relationRole === "SUBSET" && "ml-4 sm:ml-6",
-                          )}
-                        >
-                          {t(connectorKey)}
-                        </span>
-                      ) : null}
-                      <ExperienceLine
-                        requirement={requirement}
-                        relationRole={relationRole}
-                      />
-                    </Fragment>
-                  );
-                })}
-              </div>
-            ))}
+      <div className="mt-3 grid min-w-0 gap-4 @lg:grid-cols-2">
+        {blocks.length ? (
+          <div className="min-w-0">
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/75">
+              <CalendarClock
+                className="h-3.5 w-3.5 text-brand-blue"
+                aria-hidden
+              />
+              {t("experienceHeading")}
+            </h4>
+            <div
+              data-testid="jd-experience-row"
+              data-requirement-family="experience"
+              className="mt-1.5 min-w-0 space-y-2 border-l-2 border-brand-blue/35 pl-3"
+            >
+              {blocks.map((block) => (
+                <div
+                  key={block.key}
+                  role={block.relation ? "group" : undefined}
+                  aria-label={
+                    block.relation
+                      ? t(
+                          block.relation === "ANY_OF"
+                            ? "relationAnyOfLabel"
+                            : "relationAllOfLabel",
+                        )
+                      : undefined
+                  }
+                  className="space-y-1"
+                >
+                  {block.requirements.map((requirement, index) => {
+                    const relation = requirement.relation as
+                      ExtendedRelation | undefined;
+                    const relationRole = relation?.role;
+                    const connectorKey =
+                      relationRole === "SUBSET"
+                        ? "relationIncludes"
+                        : index > 0 && block.relation === "ANY_OF"
+                          ? "relationAnyOf"
+                          : index > 0 && block.relation === "ALL_OF"
+                            ? "relationAllOf"
+                            : null;
+                    return (
+                      <Fragment key={requirement.id}>
+                        {connectorKey ? (
+                          <span
+                            className={cn(
+                              "inline-flex text-xs font-medium text-muted-foreground",
+                              relationRole === "SUBSET" && "ml-4 sm:ml-6",
+                            )}
+                          >
+                            {t(connectorKey)}
+                          </span>
+                        ) : null}
+                        <ExperienceLine
+                          requirement={requirement}
+                          relationRole={relationRole}
+                        />
+                      </Fragment>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {signals.length ? (
-        <div
-          className={cn(
-            blocks.length ? "mt-3 border-t border-border/60 pt-3" : "mt-3",
-          )}
-        >
-          <h4 className="text-xs font-semibold text-foreground/75">
-            {t("technologyHeading")}
-          </h4>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {signals.map((signal) => (
-              <span
-                key={signal.skill}
-                data-testid="jd-skill-chip"
-                data-requirement-family="technology"
-                aria-label={signal.skill}
-                title={signal.evidence}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
-                  signalTone(),
-                )}
-              >
-                {signal.skill}
-              </span>
-            ))}
+        {signals.length ? (
+          <div
+            className={cn(
+              blocks.length ? "min-w-0 border-t border-border/60 pt-3 @lg:border-l @lg:border-t-0 @lg:pl-4 @lg:pt-0" : "min-w-0 @lg:col-span-2",
+            )}
+          >
+            <h4 className="text-xs font-semibold text-foreground/75">
+              {t("technologyHeading")}
+            </h4>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {signals.map((signal) => (
+                <span
+                  key={signal.skill}
+                  data-testid="jd-skill-chip"
+                  data-requirement-family="technology"
+                  aria-label={signal.skill}
+                  title={signal.evidence}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+                    signalTone(),
+                  )}
+                >
+                  {signal.skill}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </section>
   );
 }

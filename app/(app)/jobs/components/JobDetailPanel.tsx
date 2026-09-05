@@ -231,7 +231,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   // One height for every control at every status. The toolbar used to shrink
   // from h-10 to h-9 when a job was marked Applied, so choosing a status made
   // the row it lives in jump.
-  const actionHeight = cn("h-10 lg:h-8", COARSE_POINTER_MIN_HEIGHT);
+  const actionHeight = cn("h-10", COARSE_POINTER_MIN_HEIGHT);
 
   const titleParts = useMemo(
     () => splitTitleQualifier(selectedJob?.title ?? ""),
@@ -312,7 +312,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
       className={cn(
         "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
         "rounded-2xl border border-border/70 bg-background/90 shadow-sm",
-        "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(5,150,105,0.22)]",
+        "lg:rounded-2xl lg:bg-background",
         "min-h-[clamp(18rem,calc(100dvh-16rem),32rem)] max-h-[calc(100dvh-12rem)] lg:h-auto lg:min-h-0 lg:max-h-none lg:flex-1",
         mobileTab !== "detail" && "hidden lg:flex",
       )}
@@ -323,7 +323,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-px bg-gradient-to-r from-transparent via-brand-emerald-400/70 to-transparent"
       />
 
-      <div className="relative border-b border-border/60 px-4 pb-4 pt-3.5">
+      <div className="relative border-b border-border/60 px-4 py-4 sm:px-6">
         {selectedJob ? (
           <div className="relative flex flex-col">
             {/* Row 1 — who and where, then where it sits in the pipeline.
@@ -331,7 +331,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                 so they lead; the status is the one thing on this line the user
                 can change. */}
             <div className="flex min-h-8 items-center justify-between gap-3">
-              <p className="min-w-0 truncate text-sm leading-5">
+              <p className="min-w-0 text-sm leading-5 [overflow-wrap:anywhere]">
                 <span className="sr-only">{t("company")}: </span>
                 <span className="font-medium text-foreground/85">
                   {visibleFact(selectedJob.company) ?? t("unknownCompany")}
@@ -493,7 +493,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   }
                 />
               ) : null}
-              <div className="flex items-center gap-2 sm:col-span-2 lg:col-auto lg:ml-auto">
+              <div className="flex items-center gap-2 sm:col-span-2 lg:col-auto">
                 <Button
                   asChild
                   variant="ghost"
@@ -524,7 +524,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                     onDelete(selectedJob);
                   }}
                   className={cn(
-                    "size-10 shrink-0 text-foreground/55 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 lg:size-8",
+                    "size-10 shrink-0 text-foreground/55 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50 lg:size-10",
                     COARSE_POINTER_TARGET,
                   )}
                 >
@@ -572,7 +572,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         data-loading={showLoadingOverlay ? "true" : "false"}
         className={`jobs-scroll-area max-h-full flex-1 min-h-0 transition-opacity duration-200 ease-out ${listOpacityClass}`}
       >
-        <div className="p-4">
+        <div className="p-4 sm:p-6">
           {selectedJob ? (
             <div className="space-y-4 text-sm text-muted-foreground">
               {/* Label plus hairline rule. The emerald medallion that used to
@@ -614,7 +614,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   <Skeleton className="h-4 w-3/4" />
                 </div>
               ) : (
-                <div className="p-1">
+                <div className="max-w-[75ch] text-foreground/85 [overflow-wrap:anywhere]">
                   {selectedDescription ? (
                     <JobDescriptionMarkdown
                       description={selectedDescription}

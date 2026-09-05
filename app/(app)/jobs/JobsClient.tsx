@@ -701,7 +701,7 @@ export function JobsClient({
             </div>
           ) : null}
 
-          <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[380px_1fr] lg:items-stretch">
+          <section className="relative flex flex-1 flex-col gap-3 lg:grid lg:min-h-0 lg:h-full lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)] lg:items-stretch">
             <div
               className="flex shrink-0 items-center rounded-lg bg-muted/70 p-0.5 lg:hidden"
               aria-label={t("mobileTablistLabel")}
@@ -744,7 +744,7 @@ export function JobsClient({
               className={cn(
                 "relative flex flex-col overflow-hidden backdrop-blur transition-shadow duration-200 ease-out",
                 "rounded-2xl border border-border/70 bg-background/90 shadow-sm",
-                "lg:rounded-3xl lg:border-2 lg:border-border/50 lg:bg-background/85 lg:shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)] lg:hover:shadow-[0_24px_50px_-36px_rgba(5,150,105,0.22)]",
+                "lg:rounded-2xl lg:bg-background",
                 "min-h-[clamp(18rem,calc(100dvh-16rem),32rem)] max-h-[calc(100dvh-12rem)] lg:h-auto lg:min-h-0 lg:max-h-none lg:flex-1",
                 mobileTab !== "list" && "hidden lg:flex",
               )}
@@ -759,8 +759,8 @@ export function JobsClient({
                     <div className="h-full w-1/3 animate-[shimmer_1.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-brand-emerald-500 to-transparent" />
                   </div>
                 ) : null}
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
+                <div className="flex flex-col gap-2">
+                  <div className="min-w-0">
                     <JobSearchBar
                       q={q}
                       onQueryChange={setQ}
@@ -781,7 +781,7 @@ export function JobsClient({
                       data-testid="jobs-location-filter"
                       className={cn(
                         desktopFilterSelectTriggerClass,
-                        "w-[9.5rem] shrink-0 gap-1.5",
+                        "w-full gap-1.5",
                       )}
                       aria-label={t("location")}
                     >
