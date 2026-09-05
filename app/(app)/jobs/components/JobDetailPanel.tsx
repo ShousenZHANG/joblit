@@ -601,7 +601,16 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   <Skeleton className="h-4 w-3/4" />
                 </div>
               ) : (
-                <div className="max-w-[70ch] text-foreground/85 [overflow-wrap:anywhere]">
+                // The description was the only block in the pane holding a
+                // reading measure. Everything above it — title, facts,
+                // toolbar, the requirement cards and the rule over this
+                // section — spans the pane, so a 70ch column left its ragged
+                // right edge stranded under a full-width rule and read as
+                // misalignment rather than as typography. It takes the pane's
+                // own padding as its measure now, with a ceiling that only
+                // engages on a display wide enough for the line to outrun the
+                // eye's return sweep.
+                <div className="max-w-[76rem] text-foreground/85 [overflow-wrap:anywhere]">
                   {selectedDescription ? (
                     <JobDescriptionMarkdown
                       description={selectedDescription}
