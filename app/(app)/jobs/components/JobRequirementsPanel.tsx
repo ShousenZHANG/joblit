@@ -193,12 +193,12 @@ function ExperienceLine({
       data-classification="REQUIRED"
       data-relation-role={relationRole}
       className={cn(
-        "flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg py-1",
+        "flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2",
         relationRole === "SUBSET" &&
           "ml-4 border-l border-brand-blue/25 pl-3 sm:ml-6",
       )}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+      <div className="flex min-w-0 flex-1 basis-40 flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className="text-base font-semibold leading-none tracking-tight tabular-nums text-foreground">
           {requirement.years.text}
         </span>
@@ -216,7 +216,7 @@ function ExperienceLine({
         aria-live="polite"
         disabled={waiting}
         onClick={viewInJd}
-        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-lg border border-border/70 bg-background/80 px-3 text-xs font-medium text-muted-foreground outline-none transition-colors hover:border-brand-blue/30 hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-75 sm:self-center motion-reduce:transition-none"
+        className="inline-flex h-8 [@media(any-pointer:coarse)]:min-h-11 shrink-0 items-center gap-1.5 self-start rounded-lg border border-border/70 bg-background/80 px-3 text-xs font-medium text-muted-foreground outline-none transition-colors hover:border-brand-blue/30 hover:bg-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-75 sm:self-center motion-reduce:transition-none"
       >
         {waiting
           ? t("findingInJd")
@@ -273,14 +273,11 @@ export function JobRequirementsPanel({
         </h3>
       </div>
 
-      <div className="mt-2 grid min-w-0 gap-2 @lg:grid-cols-2">
+      <div className={cn("mt-2 grid min-w-0 gap-2", blocks.length > 0 && signals.length > 0 && "@lg:grid-cols-2")}>
         {blocks.length ? (
-          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.035] px-3 py-2">
-            {/* Label and value share a line. Each label held a row of its
-                own above content that was one figure or one chip, so a card
-                summarising two facts reserved the height of a card
-                summarising ten. */}
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div data-testid="jd-experience-row" data-requirement-family="experience" className="min-w-0 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.035] px-3 py-3">
+            {/* Keep the label above the content so long scopes cannot squeeze it. */}
+            <div className="min-w-0 space-y-2">
               <h4 className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-foreground/75">
                 <CalendarClock
                   className="h-3.5 w-3.5 text-brand-blue"
@@ -288,7 +285,7 @@ export function JobRequirementsPanel({
                 />
                 {t("experienceHeading")}
               </h4>
-              <div className="min-w-0 flex-1 space-y-2">
+              <div className="min-w-0 space-y-2">
               {blocks.map((block) => (
                 <div
                   key={block.key}
@@ -345,11 +342,10 @@ export function JobRequirementsPanel({
         {signals.length ? (
           <div
             className={cn(
-              "min-w-0 rounded-lg border border-border/70 bg-muted/30 px-3 py-2",
-              !blocks.length && "@lg:col-span-2",
+              "min-w-0 rounded-lg border border-border/70 bg-muted/30 px-3 py-3",
             )}
           >
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="min-w-0 space-y-2">
               <h4 className="shrink-0 text-xs font-semibold text-foreground/75">
                 {t("technologyHeading")}
               </h4>

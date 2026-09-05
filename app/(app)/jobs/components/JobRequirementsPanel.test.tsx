@@ -146,7 +146,7 @@ describe("JobRequirementsPanel", () => {
       screen.getByRole("button", {
         name: /view 5\+ years in job description/i,
       }),
-    ).toHaveClass("min-h-11");
+    ).toHaveClass("h-8", "[@media(any-pointer:coarse)]:min-h-11");
     expect(
       screen.queryByText("5+ years of experience in software QA"),
     ).not.toBeInTheDocument();

@@ -231,7 +231,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
   // One height for every control at every status. The toolbar used to shrink
   // from h-10 to h-9 when a job was marked Applied, so choosing a status made
   // the row it lives in jump.
-  const actionHeight = cn("h-11 rounded-xl px-4 text-sm font-medium hover:translate-y-0 active:scale-[0.98] before:hidden", COARSE_POINTER_MIN_HEIGHT);
+  const actionHeight = cn("h-9 rounded-lg px-3 text-sm font-medium hover:translate-y-0 active:scale-[0.98] before:hidden", COARSE_POINTER_MIN_HEIGHT);
 
   const titleParts = useMemo(
     () => splitTitleQualifier(selectedJob?.title ?? ""),
@@ -338,7 +338,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
         className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-px bg-gradient-to-r from-transparent via-brand-emerald-400/70 to-transparent"
       />
 
-      <div className="relative shrink-0 border-b border-border/70 bg-gradient-to-br from-muted/45 via-background to-background px-5 pb-4 pt-4 sm:px-7">
+      <div className="relative shrink-0 border-b border-border/70 bg-gradient-to-br from-muted/45 via-background to-background px-5 pb-3 pt-4 sm:px-7">
         {selectedJob ? (
           <div className="relative flex flex-col">
             {/* The role and its pipeline state share the top line. The
@@ -434,7 +434,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
             {/* A dedicated action rail separates workflow from job facts. */}
             <div
               data-testid="job-primary-actions"
-              className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3.5"
+              className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-2.5"
             >
               {/* CN ships a single Chinese resume with no tailoring, so it gets
                   no entry point at all. */}
@@ -519,7 +519,7 @@ export const JobDetailPanel = React.memo(function JobDetailPanel({
                   // carries the same border and height as Open job beside it,
                   // and only turns destructive on approach.
                   className={cn(
-                    "ml-auto size-11 shrink-0 rounded-xl border border-border/70 bg-background text-muted-foreground shadow-xs transition-colors hover:translate-y-0 hover:shadow-none before:hidden hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50",
+                    "ml-auto size-9 shrink-0 rounded-lg border border-border/70 bg-background text-muted-foreground shadow-xs transition-colors hover:translate-y-0 hover:shadow-none before:hidden hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive focus-visible:ring-destructive/40 disabled:cursor-not-allowed disabled:opacity-50",
                     COARSE_POINTER_TARGET,
                   )}
                 >
