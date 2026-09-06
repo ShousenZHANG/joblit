@@ -53,6 +53,31 @@ const surfaces = {
   },
 };
 
+type WorkstationMotion = { progress: number; pitch: number; yaw: number };
+
+/** Settle independently of display refresh rate, then release the demand loop. */
+export function advanceWorkstationMotion(
+  motion: WorkstationMotion,
+  target: number,
+  pointer: { x: number; y: number },
+  active: boolean,
+  delta: number,
+) {
+  const dt = Math.min(delta, 0.05);
+  const settle = (current: number, next: number, speed: number) => {
+    if (!active) return next;
+    const value = MathUtils.damp(current, next, speed, dt);
+    return Math.abs(value - next) < 0.0001 ? next : value;
+  };
+  const progress = MathUtils.clamp(target, 0, 1);
+  const pitch = active ? -pointer.y * 0.035 : 0;
+  const yaw = active ? pointer.x * 0.055 : 0;
+  motion.progress = settle(motion.progress, progress, 9);
+  motion.pitch = settle(motion.pitch, pitch, 7);
+  motion.yaw = settle(motion.yaw, yaw, 7);
+  return active && (motion.progress !== progress || motion.pitch !== pitch || motion.yaw !== yaw);
+}
+
 /** All artwork is local, illustrative UI; no model, font, or HDR downloads. */
 function makeArtwork(kind: "resume" | "letter" | "engineer" | "analyst", dark = false) {
   const surface = dark ? surfaces.dark : surfaces.light;
@@ -177,6 +202,7 @@ function Studio({
   active,
   dark,
   pointer,
+  requestFrameRef,
   onReady,
   onUnavailable,
 }: {
@@ -184,6 +210,7 @@ function Studio({
   active: boolean;
   dark: boolean;
   pointer: RefObject<Vector2>;
+  requestFrameRef: RefObject<(() => void) | null>;
   onReady?: () => void;
   onUnavailable?: () => void;
 }) {
@@ -193,9 +220,11 @@ function Studio({
   const role = useRef<Group>(null);
   const secondary = useRef<Group>(null);
   const flowDot = useRef<Mesh>(null);
+  const summaryHighlight = useRef<THREE.MeshBasicMaterial>(null);
+  const skillsHighlight = useRef<THREE.MeshBasicMaterial>(null);
+  const rimLight = useRef<THREE.PointLight>(null);
   const presented = useRef(false);
-  const elapsed = useRef(0);
-  const smoothed = useRef(progress.get());
+  const motion = useRef<WorkstationMotion>({ progress: progress.get(), pitch: 0, yaw: 0 });
   const { invalidate, viewport } = useThree();
   const callbacks = useRef({ onReady, onUnavailable });
   useEffect(() => { callbacks.current = { onReady, onUnavailable }; }, [onReady, onUnavailable]);
@@ -229,45 +258,62 @@ function Studio({
   useEffect(() => { connection.line.material.color.set(surface.connector); }, [connection, surface.connector]);
 
   useEffect(() => {
+    requestFrameRef.current = invalidate;
     invalidate();
-    return progress.on("change", () => invalidate());
-  }, [progress, active, invalidate]);
+    const unsubscribe = progress.on("change", () => invalidate());
+    return () => {
+      requestFrameRef.current = null;
+      unsubscribe();
+    };
+  }, [progress, active, invalidate, requestFrameRef]);
 
-  useFrame((_state, delta) => {
+  useFrame((state, delta) => {
     if (!root.current || !resume.current || !role.current || !cover.current || !secondary.current) return;
-    const dt = Math.min(delta, 0.05);
-    if (active) elapsed.current += dt;
-    const time = elapsed.current;
-    const target = MathUtils.clamp(progress.get(), 0, 1);
-    smoothed.current = active ? MathUtils.damp(smoothed.current, target, 7, dt) : target;
-    const p = smoothed.current;
-    const gathered = MathUtils.smoothstep(p, 0.04, 0.45);
-    const completed = MathUtils.smoothstep(p, 0.53, 0.96);
-    const sway = Math.sin(time * 0.52) * 0.024;
+    const settling = advanceWorkstationMotion(motion.current, progress.get(), pointer.current, active, delta);
+    const p = motion.current.progress;
+    const gathered = MathUtils.smoothstep(p, 0, 0.5);
+    const completed = MathUtils.smoothstep(p, 0.5, 1);
+    const gatherArc = Math.sin(gathered * Math.PI);
+    const publishArc = Math.sin(completed * Math.PI);
+    const tailored = gathered * (1 - completed);
 
-    root.current.scale.setScalar(0.93 * Math.min(1, viewport.width / 6.7));
-    root.current.position.x = 0.32 - completed * 0.82;
-    root.current.rotation.x = MathUtils.damp(root.current.rotation.x, active ? -pointer.current.y * 0.035 : 0, 5, dt);
-    root.current.rotation.y = MathUtils.damp(root.current.rotation.y, active ? pointer.current.x * 0.055 : 0, 5, dt);
+    // The same objects carry through every chapter. A short depth arc separates
+    // their paths; readable, still compositions hold at Discover/Tailor/Publish.
+    // Leave breathing room for the frontmost job card's perspective and pointer
+    // tilt. Fit height too, so short/wide canvases keep both documents in frame.
+    root.current.scale.setScalar(0.86 * Math.min(1, viewport.width / 6.7, viewport.height / 4.7));
+    root.current.position.set(0.12 * (1 - gathered), 0, 0);
+    root.current.rotation.set(motion.current.pitch, motion.current.yaw, 0);
+    state.camera.position.set(-0.12 * tailored, 0.8 - 0.14 * gathered + 0.06 * completed, 9.6 - 0.16 * tailored);
+    state.camera.lookAt(0, 0.04, 0);
 
-    resume.current.position.set(1.16 - gathered * 0.08 - completed * 1.7, 0.12 + sway + completed * 0.06, 0.1 + gathered * 0.28);
-    resume.current.rotation.set(-0.025, -0.14 + completed * 0.18, -0.035 + completed * 0.07);
-    resume.current.scale.setScalar(1 - completed * 0.06);
+    resume.current.position.set(1.52 - gathered * 0.16 - completed * 2.7, 0.16 - gathered * 0.1 + publishArc * 0.23, -0.5 + gathered * 0.92 - completed * 0.15);
+    resume.current.rotation.set(-0.025 + completed * 0.025, -0.22 + gathered * 0.1 + completed * 0.18, -0.055 + gathered * 0.035 + completed * 0.04);
+    resume.current.scale.setScalar(0.86 + gathered * 0.12 - completed * 0.02);
 
-    role.current.position.set(-1.84 + gathered * 0.08 + completed * 1.14, 0.72 + Math.sin(time * 0.44 + 1) * 0.026, 0.58 - completed * 1.55);
-    role.current.rotation.set(0.025, 0.1, -0.05 + gathered * 0.04);
-    role.current.scale.setScalar(1 - completed * 0.38);
+    role.current.position.set(-1.54 - gathered * 0.16 + completed * 0.42, 0.74 - gathered * 0.42 + gatherArc * 0.14 + completed * 0.45, 0.62 - gathered * 0.04 - completed * 1.65);
+    role.current.rotation.set(0.025, 0.12 - gathered * 0.065 + completed * 0.18, -0.065 + gathered * 0.055 + completed * 0.05);
+    role.current.scale.setScalar((1 - completed) * (1 + completed * 0.4));
     role.current.visible = completed < 0.995;
 
-    secondary.current.position.set(-1.48 - gathered * 0.2, -1.02 + gathered * 1.73 + sway * 0.5, -0.3 - gathered * 0.8);
-    secondary.current.rotation.set(0.035, 0.14, 0.035);
-    secondary.current.scale.setScalar(0.74 - gathered * 0.1);
+    secondary.current.position.set(-1.16 + gathered * 0.48, -1.12 + gathered * 1.62, -0.2 - gathered * 1.35);
+    secondary.current.rotation.set(0.035, 0.16 + gathered * 0.18, 0.065 - gathered * 0.08);
+    secondary.current.scale.setScalar(0.82 * (1 - gathered));
     secondary.current.visible = gathered < 0.995;
 
     cover.current.visible = completed > 0.005;
-    cover.current.position.set(0.98 + completed * 0.86, -0.14 - sway, -0.6 + completed * 1.1);
-    cover.current.rotation.set(-0.02, -0.12, -0.045);
-    cover.current.scale.setScalar(0.9 + completed * 0.05);
+    cover.current.position.set(1.36 + publishArc * 0.18, 0.06 - publishArc * 0.16, -0.75 + completed * 1.25);
+    cover.current.rotation.set(-0.02 + completed * 0.02, -0.26 + completed * 0.19, -0.065 + completed * 0.04);
+    cover.current.scale.setScalar(completed * (0.72 + completed * 0.24));
+
+    // Highlight only the editable summary and existing skills in the Tailor
+    // chapter. Experience stays untouched, matching the real product boundary.
+    if (summaryHighlight.current) summaryHighlight.current.opacity = tailored * 0.1;
+    if (skillsHighlight.current) skillsHighlight.current.opacity = tailored * 0.11;
+    if (rimLight.current) {
+      rimLight.current.position.set(-3 + completed * 4.6, 0.4 + gathered * 0.8, 3.2);
+      rimLight.current.intensity = (dark ? 3 : 1.5) + tailored * 0.4;
+    }
 
     // Both endpoints follow real panel edges in their common parent's space.
     // Reuse the curve and vertex buffer instead of allocating geometry per frame.
@@ -283,16 +329,17 @@ function Studio({
       point.toArray(positions, i * 3);
     }
     line.geometry.attributes.position.needsUpdate = true;
-    line.visible = completed < 0.82;
-    line.material.opacity = (0.28 + gathered * 0.2) * (1 - completed);
+    line.visible = gathered > 0.01 && completed < 0.9;
+    line.material.opacity = tailored * 0.52;
 
     if (flowDot.current) {
       flowDot.current.visible = line.visible;
-      curve.getPoint((time * 0.17) % 1, flowDot.current.position);
+      curve.getPoint(0.1 + gathered * 0.84, flowDot.current.position);
     }
 
-    // Demand rendering stops here when paused, offscreen, or motion is reduced.
-    if (active) invalidate();
+    // No ambient loop: scroll and pointer events wake the canvas; once their
+    // frame-rate-independent easing settles, the GPU can go idle again.
+    if (settling) invalidate();
     if (!presented.current) {
       presented.current = true;
       queueMicrotask(() => callbacks.current.onReady?.());
@@ -303,7 +350,7 @@ function Studio({
     <>
       <ambientLight intensity={dark ? 0.55 : 0.7} />
       <directionalLight position={[1, 5, 6]} intensity={1.3} color="#eef4ff" />
-      <pointLight position={[-3, 0.3, 3]} intensity={dark ? 3 : 1.5} color={palette.green} distance={10} decay={2} />
+      <pointLight ref={rimLight} position={[-3, 0.3, 3]} intensity={dark ? 3 : 1.5} color={palette.green} distance={10} decay={2} />
       <Environment frames={1} resolution={128}>
         <Lightformer color="#f3f7ff" intensity={1.6} position={[0, 5, 2]} scale={[10, 5, 1]} rotation={[-Math.PI / 2, 0, 0]} />
         <Lightformer color="#a6c3ee" intensity={0.75} position={[-4, 1, 3]} scale={[3, 7, 1]} rotation={[0, Math.PI / 3, 0]} />
@@ -330,6 +377,14 @@ function Studio({
             </RoundedBox>
           </group>
           <ArtworkPanel artwork={artwork.resume} width={2.58} height={3.55} paper />
+          <mesh position={[0, 0.185, 0.037]}>
+            <planeGeometry args={[2.28, 0.235]} />
+            <meshBasicMaterial ref={summaryHighlight} color={palette.green} transparent opacity={0} depthWrite={false} toneMapped={false} />
+          </mesh>
+          <mesh position={[0, -0.945, 0.037]}>
+            <planeGeometry args={[2.28, 0.2]} />
+            <meshBasicMaterial ref={skillsHighlight} color={palette.green} transparent opacity={0} depthWrite={false} toneMapped={false} />
+          </mesh>
         </group>
         <group ref={cover}>
           <ArtworkPanel artwork={artwork.letter} width={2.44} height={3.355} paper />
@@ -464,6 +519,7 @@ function SceneCanvas({ children, onUnavailable }: { children: ReactNode; onUnava
 export default function WorkstationScene({ progress, paused, dark = false, onReady, onUnavailable }: WorkstationSceneProps) {
   const host = useRef<HTMLDivElement>(null);
   const pointer = useRef(new Vector2());
+  const requestFrameRef = useRef<(() => void) | null>(null);
   const reducedMotion = useReducedMotion();
   const [visible, setVisible] = useState(true);
   const [foreground, setForeground] = useState(true);
@@ -496,14 +552,18 @@ export default function WorkstationScene({ progress, paused, dark = false, onRea
           ((event.clientX - bounds.left) / bounds.width - 0.5) * 2,
           ((event.clientY - bounds.top) / bounds.height - 0.5) * 2,
         );
+        requestFrameRef.current?.();
       }}
-      onPointerLeave={() => pointer.current.set(0, 0)}
+      onPointerLeave={() => {
+        pointer.current.set(0, 0);
+        requestFrameRef.current?.();
+      }}
     >
       <SceneBoundary onUnavailable={onUnavailable}>
         <SceneCanvas onUnavailable={onUnavailable}>
           <SceneBoundary onUnavailable={onUnavailable}>
             <Suspense fallback={null}>
-              <Studio progress={progress} active={active} dark={dark} pointer={pointer} onReady={onReady} onUnavailable={onUnavailable} />
+              <Studio progress={progress} active={active} dark={dark} pointer={pointer} requestFrameRef={requestFrameRef} onReady={onReady} onUnavailable={onUnavailable} />
             </Suspense>
           </SceneBoundary>
         </SceneCanvas>

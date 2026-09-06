@@ -94,6 +94,9 @@ describe("ApplicationDemo", () => {
     const opener = screen.getByRole("button", { name: "Tailor" });
     await user.click(opener);
     const modal = screen.getByRole("dialog", { name: "Tailor this application" });
+    // A perspective ancestor would turn this viewport-fixed modal into a
+    // chapter-relative overlay and clip its backdrop during scrolling.
+    expect(modal.closest("[data-scroll-chapter]")).toBeNull();
     expect(within(modal).getByRole("heading", { name: "Tailor this application" })).toHaveFocus();
     expect(within(modal).getByRole("tab", { name: "Resume" })).toHaveAttribute("aria-selected", "true");
     expect(within(modal).queryByRole("button", { name: "Review" })).not.toBeInTheDocument();

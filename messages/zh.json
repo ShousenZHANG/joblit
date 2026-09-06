@@ -671,6 +671,18 @@
     }
   },
   "landingExperience": {
+    "pageNavigation": {
+      "label": "页面章节导航",
+      "overview": "认识 Joblit",
+      "workflow": "申请流程",
+      "demo": "体验演示",
+      "features": "发现职位",
+      "documents": "申请材料",
+      "organise": "有序管理",
+      "get-started": "配置本地 AI",
+      "faq": "常见问题",
+      "start": "开始使用"
+    },
     "nav": {
       "primary": "主导航",
       "home": "Joblit 首页",
@@ -704,6 +716,9 @@
       "eyebrow": "从发现机会，到准备申请",
       "title": "让下一步，变得清晰。",
       "description": "三个相连的步骤。滚动探索，或直接选择一步。",
+      "navigation": "探索申请流程",
+      "continue": "继续向下探索",
+      "skip": "体验演示",
       "steps": [
         {
           "label": "发现",
@@ -739,6 +754,10 @@
       "tailoringDescription": "按岗位调整个人摘要，选出已有档案中的相关技能。职业经历始终属于你，AI 不会重写你的经历。",
       "pdfTitle": "让申请，有一个漂亮的收尾。",
       "pdfDescription": "生成针对岗位的简历和求职信，检查结果，再下载排版整洁的 LaTeX PDF。",
+      "documentsEyebrow": "从真实经历，到这份申请",
+      "documentsTitle": "让你的经历，\n成为更贴合的申请。",
+      "organiseEyebrow": "跟得上你的每一步",
+      "organiseTitle": "不同方向，\n都有清晰进展。",
       "versionsTitle": "让档案，随你的方向成长。",
       "versionsDescription": "为不同求职方向保留简历版本。编辑自动保存，让你专注打磨个人档案。",
       "trackingTitle": "每份申请，都有清晰进展。",

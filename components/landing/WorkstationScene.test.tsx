@@ -1,7 +1,7 @@
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { motionValue } from "framer-motion";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import WorkstationScene from "./WorkstationScene";
+import WorkstationScene, { advanceWorkstationMotion } from "./WorkstationScene";
 
 const gpu = vi.hoisted(() => ({
   construct: vi.fn(),
@@ -40,6 +40,52 @@ vi.mock("@react-three/drei", () => ({
   Lightformer: () => null,
   RoundedBox: () => null,
 }));
+
+describe("workstation motion lifecycle", () => {
+  it("settles at the same pace on 30 Hz and 120 Hz displays", () => {
+    const run = (fps: number) => {
+      const motion = { progress: 0, pitch: 0, yaw: 0 };
+      for (let frame = 0; frame < fps / 2; frame++) {
+        advanceWorkstationMotion(motion, 0.5, { x: 0.6, y: -0.4 }, true, 1 / fps);
+      }
+      return motion;
+    };
+
+    const slow = run(30);
+    const fast = run(120);
+    expect(slow.progress).toBeCloseTo(fast.progress, 6);
+    expect(slow.pitch).toBeCloseTo(fast.pitch, 6);
+    expect(slow.yaw).toBeCloseTo(fast.yaw, 6);
+    expect(slow.progress).toBeGreaterThan(0.49);
+  });
+
+  it("releases demand rendering after a transition and supports reversing it", () => {
+    const motion = { progress: 0, pitch: 0, yaw: 0 };
+    const pointer = { x: 0.5, y: 0.3 };
+    let needsFrame = true;
+    for (let frame = 0; frame < 180 && needsFrame; frame++) {
+      needsFrame = advanceWorkstationMotion(motion, 1, pointer, true, 1 / 60);
+    }
+    expect(needsFrame).toBe(false);
+    expect(motion.progress).toBe(1);
+
+    expect(advanceWorkstationMotion(motion, 0, pointer, true, 1 / 60)).toBe(true);
+    expect(motion.progress).toBeGreaterThan(0);
+    expect(motion.progress).toBeLessThan(1);
+    for (let frame = 0; frame < 180; frame++) {
+      needsFrame = advanceWorkstationMotion(motion, 0, pointer, true, 1 / 60);
+    }
+    expect(needsFrame).toBe(false);
+    expect(motion.progress).toBe(0);
+  });
+
+  it("renders a chapter immediately without scheduling motion when inactive", () => {
+    const motion = { progress: 0.2, pitch: 0.03, yaw: -0.04 };
+
+    expect(advanceWorkstationMotion(motion, 0.5, { x: 1, y: 1 }, false, 1 / 60)).toBe(false);
+    expect(motion).toEqual({ progress: 0.5, pitch: 0, yaw: 0 });
+  });
+});
 
 describe("workstation graphics availability", () => {
   beforeEach(() => {

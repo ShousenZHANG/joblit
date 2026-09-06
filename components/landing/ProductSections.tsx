@@ -12,11 +12,13 @@ import {
   Github,
   ListFilter,
   MapPin,
+  MessageCircleQuestion,
   ShieldCheck,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { JoblitMark } from "@/components/brand/JoblitMark";
 import { useCtaHref } from "./lib/useCtaHref";
+import { DepthLayer, ScrollChapter } from "./ScrollChapter";
 import styles from "./ProductSections.module.css";
 
 const REPO_URL = "https://github.com/ShousenZHANG/joblit";
@@ -29,18 +31,20 @@ export function ProductSections() {
 
   return (
     <div className={styles.root}>
-      <section id="features" className={styles.features} aria-labelledby="features-title">
-        <div className={styles.sectionIntro}>
-          <p className={styles.eyebrow}>{t("features.eyebrow")}</p>
-          <h2 id="features-title" className={styles.sectionTitle}><EditorialTitle text={t("features.title")} accented={useSerifAccent} /></h2>
-          <p className={styles.introDescription}>{t("features.description")}</p>
-        </div>
-
-        <div className={styles.featureSpread}>
-          <div className={styles.featureCopy}>
-            <FeatureText number="01" title={t("features.discoveryTitle")} description={t("features.discoveryDescription")} />
-            <FeatureText number="02" title={t("features.requirementsTitle")} description={t("features.requirementsDescription")} />
+      <ScrollChapter id="features" labelledBy="features-title" className={styles.chapter}>
+        <div className={`${styles.chapterInner} ${styles.featureSpread}`}>
+          <div className={styles.chapterCopy}>
+            <div className={styles.sectionIntro}>
+              <p className={styles.eyebrow}>{t("features.eyebrow")}</p>
+              <h2 id="features-title" className={styles.sectionTitle}><EditorialTitle text={t("features.title")} accented={useSerifAccent} /></h2>
+              <p className={styles.introDescription}>{t("features.description")}</p>
+            </div>
+            <div className={styles.featureCopy}>
+              <FeatureText number="01" title={t("features.discoveryTitle")} description={t("features.discoveryDescription")} />
+              <FeatureText number="02" title={t("features.requirementsTitle")} description={t("features.requirementsDescription")} />
+            </div>
           </div>
+          <DepthLayer className={styles.visualLayer} depth={1.2} tilt={-2}>
           <figure className={styles.opportunityFigure}>
             <div className={styles.figureTopline}>
               <span className={styles.figureIcon}><ListFilter size={16} aria-hidden="true" /></span>
@@ -64,9 +68,13 @@ export function ProductSections() {
             </div>
             <figcaption className={styles.figureCaption}>{t("features.previewLabel")}</figcaption>
           </figure>
+          </DepthLayer>
         </div>
+      </ScrollChapter>
 
-        <div className={`${styles.featureSpread} ${styles.documentSpread}`}>
+      <ScrollChapter id="documents" labelledBy="documents-title" className={styles.chapter}>
+        <div className={`${styles.chapterInner} ${styles.featureSpread} ${styles.documentSpread}`}>
+          <DepthLayer className={styles.visualLayer} depth={1.4} tilt={2}>
           <figure className={styles.documentFigure}>
             <div className={styles.documentGhost} aria-hidden="true" />
             <div className={styles.resumePaper}>
@@ -83,13 +91,28 @@ export function ProductSections() {
             <div className={styles.documentChip}><FileText size={18} aria-hidden="true" /><span>{t("features.documentReady")}</span><span className={styles.pdfBadge}>{t("features.pdfBadge")}</span></div>
             <figcaption className={styles.figureCaption}>{t("features.previewLabel")}</figcaption>
           </figure>
-          <div className={styles.featureCopy}>
-            <FeatureText number="03" title={t("features.tailoringTitle")} description={t("features.tailoringDescription")} />
-            <FeatureText number="04" title={t("features.pdfTitle")} description={t("features.pdfDescription")} />
+          </DepthLayer>
+          <div className={styles.chapterCopy}>
+            <div className={styles.sectionIntro}>
+              <p className={styles.eyebrow}>{t("features.documentsEyebrow")}</p>
+              <h2 id="documents-title" className={styles.sectionTitle}><EditorialTitle text={t("features.documentsTitle")} accented={useSerifAccent} /></h2>
+            </div>
+            <div className={styles.featureCopy}>
+              <FeatureText number="03" title={t("features.tailoringTitle")} description={t("features.tailoringDescription")} />
+              <FeatureText number="04" title={t("features.pdfTitle")} description={t("features.pdfDescription")} />
+            </div>
           </div>
         </div>
+      </ScrollChapter>
 
+      <ScrollChapter id="organise" labelledBy="organise-title" className={styles.chapter}>
+        <div className={styles.chapterInner}>
+          <div className={styles.organiseIntro}>
+            <p className={styles.eyebrow}>{t("features.organiseEyebrow")}</p>
+            <h2 id="organise-title" className={styles.sectionTitle}><EditorialTitle text={t("features.organiseTitle")} accented={useSerifAccent} /></h2>
+          </div>
         <div className={styles.supportingFeatures}>
+          <DepthLayer depth={0.9} tilt={-1.5}>
           <div className={styles.supportingFeature}>
             <FeatureText number="05" title={t("features.versionsTitle")} description={t("features.versionsDescription")} />
             <div className={styles.versionsPreview}>
@@ -99,6 +122,8 @@ export function ProductSections() {
               <p className={styles.autosave}><Check size={13} aria-hidden="true" />{t("features.autosaved")}</p>
             </div>
           </div>
+          </DepthLayer>
+          <DepthLayer depth={1.25} tilt={1.5}>
           <div className={styles.supportingFeature}>
             <FeatureText number="06" title={t("features.trackingTitle")} description={t("features.trackingDescription")} />
             <div className={styles.trackingPreview}>
@@ -111,15 +136,20 @@ export function ProductSections() {
               </div>
             </div>
           </div>
+          </DepthLayer>
         </div>
-      </section>
+        </div>
+      </ScrollChapter>
 
-      <section id="get-started" className={styles.gettingStarted} aria-labelledby="get-started-title">
+      <ScrollChapter id="get-started" labelledBy="get-started-title" className={styles.chapter} interactive>
+        <div className={`${styles.chapterInner} ${styles.gettingStarted}`}>
         <div className={styles.setupIntro}>
           <p className={styles.eyebrow}>{t("gettingStarted.eyebrow")}</p>
           <h2 id="get-started-title" className={styles.sectionTitle}><EditorialTitle text={t("gettingStarted.title")} accented={useSerifAccent} /></h2>
           <p className={styles.introDescription}>{t("gettingStarted.description")}</p>
+          <p className={styles.setupNote}><ShieldCheck size={18} aria-hidden="true" />{t("gettingStarted.note")}</p>
         </div>
+        <DepthLayer depth={1} tilt={-1}>
         <ol className={styles.setupSteps}>
           {[1, 2, 3].map((step) => (
             <li key={step}>
@@ -132,12 +162,21 @@ export function ProductSections() {
             </li>
           ))}
         </ol>
-      </section>
+        </DepthLayer>
+        </div>
+      </ScrollChapter>
 
-      <section id="faq" className={styles.faq} aria-labelledby="faq-title">
+      <ScrollChapter id="faq" labelledBy="faq-title" className={styles.chapter} interactive>
+        <div className={`${styles.chapterInner} ${styles.faq}`}>
         <div>
           <p className={styles.eyebrow}>{t("faq.eyebrow")}</p>
           <h2 id="faq-title" className={styles.faqTitle}>{t("faq.title")}</h2>
+          <DepthLayer depth={1.1} tilt={-3}>
+            <div className={styles.faqVisual} aria-hidden="true">
+              <div className={styles.faqSheet}><MessageCircleQuestion size={70} strokeWidth={1.1} /><span /><span /><span /></div>
+              <div className={styles.faqSeal}><ShieldCheck size={27} strokeWidth={1.4} /></div>
+            </div>
+          </DepthLayer>
         </div>
         <div className={styles.faqItems}>
           {[0, 1, 2, 3].map((index) => (
@@ -147,10 +186,13 @@ export function ProductSections() {
             </details>
           ))}
         </div>
-      </section>
+        </div>
+      </ScrollChapter>
 
-      <section className={styles.finalCta} aria-labelledby="final-cta-title">
-        <div className={styles.ctaEmblem} aria-hidden="true"><JoblitMark size={40} color="currentColor" ariaLabel={null} /></div>
+      <ScrollChapter id="start" labelledBy="final-cta-title" className={`${styles.chapter} ${styles.closingChapter}`} interactive closing>
+        <div className={styles.chapterInner}>
+        <div className={styles.finalCta}>
+        <DepthLayer depth={1.3} tilt={-4}><div className={styles.ctaEmblem} aria-hidden="true"><JoblitMark size={34} color="currentColor" ariaLabel={null} /></div></DepthLayer>
         <p className={styles.eyebrow}>{t("finalCta.eyebrow")}</p>
         <h2 id="final-cta-title" className={styles.ctaTitle}><EditorialTitle text={t("finalCta.title")} accented={useSerifAccent} /></h2>
         <p className={styles.ctaDescription}>{t("finalCta.description")}</p>
@@ -158,7 +200,7 @@ export function ProductSections() {
           <Link href={cta.href} prefetch={cta.prefetch} className={styles.primaryButton}>{t("finalCta.primary")}<ArrowRight size={17} aria-hidden="true" /></Link>
           <a href="#demo" className={styles.secondaryButton}>{t("finalCta.secondary")}<ArrowUpRight size={16} aria-hidden="true" /></a>
         </div>
-      </section>
+        </div>
 
       <footer className={styles.footer}>
         <div className={styles.footerTop}>
@@ -185,6 +227,8 @@ export function ProductSections() {
         </div>
         <div className={styles.footerBottom}><span>{t("footer.copyright")}</span><span>{t("footer.note")}</span></div>
       </footer>
+        </div>
+      </ScrollChapter>
     </div>
   );
 }

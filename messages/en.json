@@ -671,6 +671,18 @@
     }
   },
   "landingExperience": {
+    "pageNavigation": {
+      "label": "On this page",
+      "overview": "Overview",
+      "workflow": "How it works",
+      "demo": "Try the demo",
+      "features": "Discover opportunities",
+      "documents": "Your documents",
+      "organise": "Stay organised",
+      "get-started": "Set up local AI",
+      "faq": "Frequently asked questions",
+      "start": "Get started"
+    },
     "nav": {
       "primary": "Primary navigation",
       "home": "Joblit home",
@@ -704,6 +716,9 @@
       "eyebrow": "FROM OPPORTUNITY TO APPLICATION",
       "title": "A clearer path to your next role.",
       "description": "Three connected steps. Scroll to explore, or choose a step.",
+      "navigation": "Explore the application workflow",
+      "continue": "Scroll to continue",
+      "skip": "Try the demo",
       "steps": [
         {
           "label": "DISCOVER",
@@ -739,6 +754,10 @@
       "tailoringDescription": "Adapt your summary and select relevant skills from your existing profile. Your career history stays yours; AI does not rewrite your experience.",
       "pdfTitle": "A considered finish.",
       "pdfDescription": "Create a tailored resume and cover letter, review the result, then download clean LaTeX PDFs for your application.",
+      "documentsEyebrow": "FROM YOUR EXPERIENCE, FOR THIS ROLE",
+      "documentsTitle": "Your experience.\nA more considered application.",
+      "organiseEyebrow": "A WORKSPACE THAT KEEPS UP",
+      "organiseTitle": "Different directions.\nEverything in view.",
       "versionsTitle": "A profile you can build on.",
       "versionsDescription": "Keep resume versions for different directions. Auto-save keeps your edits as you refine your profile.",
       "trackingTitle": "Know where every application stands.",

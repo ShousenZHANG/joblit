@@ -28,7 +28,7 @@ vi.mock("framer-motion", async (original) => {
     useSpring: (source: MotionValue<number>) => source,
     useScroll: () => {
       const value = actual.useMotionValue(0);
-      runtime.scroll = value;
+      runtime.scroll ??= value;
       return { scrollYProgress: value };
     },
   };
@@ -38,6 +38,7 @@ const observations: { target: Element; callback: IntersectionObserverCallback }[
 const hiddenDescriptor = Object.getOwnPropertyDescriptor(document, "hidden");
 const originalMatchMedia = window.matchMedia;
 let motionQuery: EventTarget & { matches: boolean };
+let layoutQuery: EventTarget & { matches: boolean };
 
 function reducedMotion(enabled: boolean) {
   motionQuery.matches = enabled;
@@ -65,7 +66,9 @@ describe("ImmersiveLanding motion lifecycle", () => {
     runtime.theme = "light";
     runtime.scroll = null;
     motionQuery = Object.assign(new EventTarget(), { matches: false });
-    window.matchMedia = () => motionQuery as MediaQueryList;
+    layoutQuery = Object.assign(new EventTarget(), { matches: true });
+    window.matchMedia = query => (query.includes("min-width: 960px") ? layoutQuery : motionQuery) as MediaQueryList;
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     runtime.scene.mockClear();
     observations.length = 0;
     pageVisibility(true);
@@ -81,6 +84,7 @@ describe("ImmersiveLanding motion lifecycle", () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     window.matchMedia = originalMatchMedia;
     if (hiddenDescriptor) Object.defineProperty(document, "hidden", hiddenDescriptor);
     else Reflect.deleteProperty(document, "hidden");
@@ -90,6 +94,11 @@ describe("ImmersiveLanding motion lifecycle", () => {
     renderLanding();
     act(() => vi.advanceTimersByTime(1000));
     expect(runtime.scene).not.toHaveBeenCalled();
+    // A restored deep link can animate later chapters without loading WebGL.
+    const pause = screen.getByRole("button", { name: messages.landingExperience.hero.pause });
+    fireEvent.click(pause);
+    expect(document.getElementById("features")).toHaveAttribute("data-chapter-still", "true");
+    fireEvent.click(screen.getByRole("button", { name: messages.landingExperience.hero.resume }));
     act(() => sceneVisibility(true));
     act(() => vi.advanceTimersByTime(200));
     act(() => sceneVisibility(false));
@@ -132,7 +141,7 @@ describe("ImmersiveLanding motion lifecycle", () => {
     expect(screen.getByTestId("workstation-scene")).toBeInTheDocument();
     expect(runtime.scene.mock.lastCall![0].paused).toBe(false);
     expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveAttribute("data-scene-state", "loading");
-    expect(screen.queryByRole("button", { name: messages.landingExperience.hero.pause })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: messages.landingExperience.hero.pause })).toBeInTheDocument();
     act(() => runtime.scene.mock.lastCall![0].onReady());
     expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveAttribute("data-scene-state", "ready");
   });
@@ -166,32 +175,45 @@ describe("ImmersiveLanding motion lifecycle", () => {
     }
   });
 
-  it("keeps an explicitly selected workflow panel and scene aligned through layout changes until real scrolling", () => {
+  it("navigates chapters on the native timeline and keeps the text and scene aligned in both directions", () => {
     renderLanding();
     act(() => sceneVisibility(true));
     act(() => vi.advanceTimersByTime(250));
     const workflow = document.getElementById("workflow")!;
+    vi.spyOn(workflow, "getBoundingClientRect").mockReturnValue({ top: 800, height: 2720 } as DOMRect);
     const steps = within(workflow).getAllByRole("button");
     fireEvent.click(steps[2]);
-    expect(steps[2]).toHaveAttribute("aria-expanded", "true");
-    expect(within(workflow).getByRole("region")).toHaveTextContent(messages.landingExperience.story.steps[2].description);
-    expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(1);
-    // A resized panel or browser scroll anchoring can update the measured
-    // progress without the reader asking to leave the selected step.
-    act(() => runtime.scroll!.set(0.1));
-    expect(steps[2]).toHaveAttribute("aria-expanded", "true");
-    expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(1);
-    fireEvent.wheel(window, { deltaX: 30, deltaY: 0 });
-    act(() => runtime.scroll!.set(0.15));
-    expect(steps[2]).toHaveAttribute("aria-expanded", "true");
-    fireEvent.keyDown(steps[2], { key: " " });
-    act(() => runtime.scroll!.set(0.2));
-    expect(steps[2]).toHaveAttribute("aria-expanded", "true");
-    fireEvent.wheel(window, { deltaY: 60 });
-    act(() => runtime.scroll!.set(0.3));
-    expect(steps[1]).toHaveAttribute("aria-expanded", "true");
-    expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(0.3);
-    fireEvent.click(steps[0]);
+    expect(window.scrollTo).toHaveBeenCalledWith({ top: 800 + (2720 - window.innerHeight) * .92, behavior: "smooth" });
+    // Selecting a destination does not jump the scene ahead of the scroll.
     expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(0);
+    act(() => runtime.scroll!.set(.92));
+    expect(steps[2]).toHaveAttribute("aria-current", "step");
+    expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(1);
+    act(() => runtime.scroll!.set(.5));
+    expect(steps[1]).toHaveAttribute("aria-current", "step");
+    expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(.5);
+    act(() => runtime.scroll!.set(.1));
+    expect(steps[0]).toHaveAttribute("aria-current", "step");
+    expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(0);
+    fireEvent.click(steps[0]);
+    expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 800 + (2720 - window.innerHeight) * .08, behavior: "smooth" });
+  });
+
+  it("switches to readable flow on narrow or short screens and restores the current scroll scene when enlarged", () => {
+    renderLanding();
+    act(() => sceneVisibility(true));
+    act(() => vi.advanceTimersByTime(250));
+    act(() => runtime.scroll!.set(.5));
+    const journey = screen.getByRole("heading", { level: 1 }).closest("section")!;
+    expect(journey).toHaveAttribute("data-layout", "cinematic");
+    act(() => { layoutQuery.matches = false; layoutQuery.dispatchEvent(new Event("change")); });
+    expect(journey).toHaveAttribute("data-layout", "flow");
+    const workflow = document.getElementById("workflow")!;
+    for (const step of messages.landingExperience.story.steps) {
+      expect(within(workflow).getByRole("heading", { name: step.title })).toBeVisible();
+    }
+    act(() => { layoutQuery.matches = true; layoutQuery.dispatchEvent(new Event("change")); });
+    expect(journey).toHaveAttribute("data-layout", "cinematic");
+    expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(.5);
   });
 });

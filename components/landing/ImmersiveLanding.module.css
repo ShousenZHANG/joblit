@@ -47,19 +47,19 @@
 .mobileNav a { display: flex; align-items: center; min-height: 48px; color: var(--experience-text); font-size: 14px; }
 .journey { position: relative; isolation: isolate; background: radial-gradient(ellipse at 50% 12%, #0bbd9310, transparent 42%), radial-gradient(ellipse at 90% 35%, #39b7d30b, transparent 46%); }
 :global(.dark) .journey::before { content: ""; position: absolute; inset: 0; z-index: -2; pointer-events: none; opacity: .35; background-image: radial-gradient(circle at 13px 27px, #91b6cc 1px, transparent 1.2px), radial-gradient(circle at 80px 110px, #49ae9f 1px, transparent 1.2px); background-size: 239px 233px, 347px 311px; mask-image: linear-gradient(#000, #0008 70%, transparent); }
-.stage { position: sticky; top: 0; width: 100%; height: min(100svh, 960px); margin-bottom: max(-100svh, -960px); overflow: hidden; pointer-events: none; z-index: -1; }
-.sceneDock { position: absolute; top: 10%; right: max(0px, calc((100vw - 1280px) / 2 - 24px)); width: min(54vw, 660px); height: 82%; }
+.stage { position: sticky; top: 0; width: 100%; height: 100svh; margin-bottom: -100svh; overflow: hidden; pointer-events: none; z-index: -1; }
+.sceneDock { position: absolute; top: 12%; right: max(0px, calc((100vw - 1360px) / 2 - 12px)); width: min(56vw, 760px); height: 80%; }
 .posterLayer, .canvasLayer { position: absolute; inset: 0; }
 .posterLayer { opacity: 1; transition: opacity .5s; }
-.posterHidden { opacity: 0; }
+.posterHidden { opacity: 0; visibility: hidden; }
 .poster { width: 100%; height: 100%; }
 .canvasLayer { pointer-events: auto; }
 .stageFloor { position: absolute; inset: auto 0 0; height: 20%; background: linear-gradient(transparent, var(--experience-bg)); }
-.hero { position: relative; display: flex; align-items: center; max-width: 1280px; min-height: min(100svh, 960px); margin: auto; padding: 164px 38px 102px; pointer-events: none; }
-.heroCopy { position: relative; z-index: 2; width: 55%; pointer-events: auto; }
+.hero { position: relative; display: flex; align-items: center; max-width: 1280px; min-height: 100svh; margin: auto; padding: 164px 38px 102px; pointer-events: none; }
+.heroCopy { position: relative; z-index: 2; width: 50%; pointer-events: auto; }
 .eyebrow { display: flex; align-items: center; gap: 9px; color: var(--experience-green); font-size: 11px; font-weight: 600; letter-spacing: .04em; }
 .eyebrow > span { width: 6px; height: 6px; border-radius: 50%; background: var(--experience-green); box-shadow: 0 0 14px #10b98122; }
-.hero h1 { max-width: 740px; margin: 29px 0 30px; font-size: clamp(52px, 5.1vw, 78px); font-weight: 780; line-height: 1.07; letter-spacing: -.06em; text-wrap: balance; }
+.hero h1 { max-width: 740px; margin: 29px 0 30px; font-size: clamp(48px, 4.5vw, 68px); font-weight: 780; line-height: 1.07; letter-spacing: -.06em; text-wrap: balance; }
 .titleAccent { position: relative; display: inline-block; padding-bottom: 12px; color: var(--experience-green); background: linear-gradient(100deg, #008767, #079ab3); background-clip: text; -webkit-text-fill-color: transparent; }
 .titleAccent:lang(en) { font-family: var(--font-instrument-serif), Georgia, serif; font-size: 1.22em; font-weight: 400; font-style: italic; line-height: 1.1; letter-spacing: -.045em; }
 :global(.dark) .titleAccent { background-image: linear-gradient(100deg, #0cc498, #28bace); }
@@ -81,14 +81,23 @@
 .sceneCaption { display: flex; align-items: center; gap: 15px; color: var(--experience-muted); font-family: var(--font-geist-mono), monospace; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
 .sceneIndex { color: var(--experience-text); }
 .motionControl { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--experience-line); border-radius: 50%; background: var(--experience-raised); color: var(--experience-text); }
-.story { width: min(1280px, 100%); margin: auto; padding: 24px 38px 72px; scroll-margin-top: 105px; pointer-events: none; overflow-anchor: none; }
-.storyContent { width: 45%; max-width: 490px; pointer-events: auto; }
+.story { position: relative; width: min(1280px, 100%); margin: auto; padding: 0 38px; scroll-margin-top: 0; pointer-events: none; overflow-anchor: none; }
+.storyContent { width: 44%; max-width: 500px; pointer-events: auto; }
+.journey[data-layout="cinematic"] .story { height: 340svh; }
+.journey[data-layout="cinematic"] .storyContent { position: sticky; top: 104px; display: flex; align-items: center; height: calc(100svh - 128px); }
+.journey[data-layout="flow"] .story { padding-block: 48px 80px; scroll-margin-top: 104px; }
 .content { position: relative; background: var(--experience-bg); border-top: 1px solid var(--experience-line); }
 @media (max-width: 1150px) { .hero { padding-inline: 30px; } .hero h1 { font-size: clamp(48px, 5.1vw, 64px); } .sceneDock { right: -2%; width: 54%; } }
 @media (max-width: 959px) {
   .navLinks { display: none; } .menuToggle { display: flex; } .nav { gap: 16px; }
   .heroCopy { width: 54%; } .hero h1 { font-size: clamp(43px, 5.65vw, 60px); } .sceneDock { right: -3%; width: 55%; }
   .heroDescription { max-width: 370px; } .storyContent { width: 49%; } .sceneCaption > span:not(.sceneIndex) { display: none; }
+}
+/* Readable flow is also used on short laptop windows and at browser zoom. */
+@media (min-width: 701px) and (max-width: 959px), (min-width: 701px) and (max-height: 739px) {
+  .journey[data-layout="flow"] .storyContent { width: 100%; max-width: none; }
+  .journey[data-layout="flow"] .story { background: var(--experience-bg); }
+  .journey[data-layout="flow"] .hero { min-height: max(660px, 100svh); }
 }
 @media (max-width: 700px) {
   .navWrap { top: 10px; width: calc(100% - 28px); margin-bottom: -70px; padding-top: 10px; }
@@ -107,6 +116,12 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .landing *, .landing *::before, .landing *::after { transition: none !important; animation: none !important; }
+  .journey .story { background: var(--experience-bg); }
+  .journey .storyContent { width: 100%; max-width: 760px; margin-inline: auto; }
+  .stage { position: absolute; }
+}
+@media (prefers-reduced-motion: reduce) and (max-width: 700px) {
+  .stage { position: relative; }
 }
 @media (max-width: 360px) {
   .nav { gap: 4px; padding-inline: 8px; }
