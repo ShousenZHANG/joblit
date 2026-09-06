@@ -11,7 +11,7 @@ import { composeApplicationResumeRenderInput } from "./applicationResumeComposit
 
 type ResumeRenderInput = ReturnType<typeof mapResumeProfile>;
 type ManualImportTarget = "resume" | "cover";
-type ManualImportSource = "manual_import" | "codex_batch";
+type ManualImportSource = "manual_import" | "local_ai" | "codex_batch";
 
 type ManualImportJob = {
   title: string;

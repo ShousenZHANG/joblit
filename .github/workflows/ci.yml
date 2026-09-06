@@ -227,6 +227,9 @@ jobs:
       - name: Test (with coverage ratchet)
         run: npm run test:coverage
 
+      - name: Local companion tests
+        run: node --test tools/companion/*.test.mjs
+
       - name: Build
         run: npm run build
 

@@ -27,13 +27,9 @@ const csp = [
   // from the rendered PDF blob (would silently break under an enforced policy
   // otherwise — Report-Only never surfaced it).
   //
-  // The two loopback entries are the tailoring sidecar (ADR-0024). Generation
-  // has to happen on the operator's own machine because the server holds no
-  // model credential (ADR-0015), so the page fetches a process on this port.
-  // What this costs: an XSS on this origin could also reach a service the
-  // visitor happens to run on 8791. It cannot exfiltrate what it finds — every
-  // outbound destination stays on this list — and the port is specific rather
-  // than a wildcard, so the widening is one port, not the local network.
+  // The paired local assistant (ADR-0025) listens on one fixed loopback port.
+  // Its own Origin/Host checks and pairing tokens protect control requests;
+  // CSP alone is not an authorization boundary. Model credentials stay local.
   "connect-src 'self' blob: http://127.0.0.1:8791 http://localhost:8791 https://generativelanguage.googleapis.com https://*.public.blob.vercel-storage.com https://vitals.vercel-insights.com",
   "frame-src 'self' blob:",
   "frame-ancestors 'none'",
@@ -58,6 +54,12 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/local-companion/download": [
+      "./tools/companion/*.mjs",
+      "./tools/companion/windows/*",
+    ],
+  },
   // pdfjs ships a Node build that installs its own DOM shims (DOMMatrix,
   // Path2D, ImageData) by detecting the runtime at load time. Bundling it into
   // a serverless function defeats that detection, so page parsing died on

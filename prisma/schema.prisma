@@ -106,6 +106,7 @@ model User {
   promptRuleTemplates   PromptRuleTemplate[]
   onboardingState       OnboardingState?
   applicationEvents     ApplicationEvent[]
+  localTailoringTasks    LocalTailoringTask[]
 }
 
 model Account {
@@ -149,6 +150,7 @@ model Job {
   id     String @id @default(uuid()) @db.Uuid
   userId String @db.Uuid
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  localTailoringTasks LocalTailoringTask[]
 
   jobUrl          String
   title           String
@@ -534,4 +536,51 @@ model DiscoverCache {
   expiresAt DateTime
 
   @@index([expiresAt])
+}
+
+/// A user-issued capability for one local generation. No model credentials,
+/// prompt text, profile contents, or raw model output are stored here.
+model LocalTailoringTask {
+  id                 String   @id @db.Uuid
+  userId             String   @db.Uuid
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId              String   @db.Uuid
+  job                Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  target             String
+  status             String   @default("pending")
+  attempt            Int      @default(0)
+  capabilityHash     String
+  expiresAt          DateTime
+  promptHash         String
+  resumeProfileId    String   @db.Uuid
+  resumeSnapshotHash String
+  jobSnapshotHash    String
+  profileUpdatedAt   DateTime
+  rulesHash          String
+  locale             String
+  expectedTargetHash String
+  result             Json?
+  error              Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  attempts           LocalTailoringAttempt[]
+
+  @@index([userId, jobId, target, createdAt])
+  @@index([status, expiresAt])
+}
+
+/// Immutable per-attempt input identity and its replayable verdict. The final
+/// verdict commits in the same transaction as the Application/PDF pointer.
+model LocalTailoringAttempt {
+  taskId       String   @db.Uuid
+  task         LocalTailoringTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  attempt      Int
+  outputHash   String
+  claimId      String?  @db.Uuid
+  claimExpiresAt DateTime?
+  response     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@id([taskId, attempt])
 }

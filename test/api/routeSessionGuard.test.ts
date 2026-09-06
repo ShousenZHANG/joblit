@@ -42,6 +42,17 @@ const NON_SESSION_ROUTES = new Set([
   "app/api/fetch-runs/[id]/config/route.ts",
   "app/api/artifacts/reconcile/route.ts",
   "app/api/me/route.ts",
+  "app/api/local-companion/download/route.ts",
+]);
+
+// These use the scoped task capability seam. Read/cancel may additionally
+// enter its session branch; result/progress/failure cannot use a session.
+const LOCAL_TASK_ROUTES = new Set([
+  "app/api/local-tailoring/tasks/[id]/route.ts",
+  "app/api/local-tailoring/tasks/[id]/result/route.ts",
+  "app/api/local-tailoring/tasks/[id]/progress/route.ts",
+  "app/api/local-tailoring/tasks/[id]/cancel/route.ts",
+  "app/api/local-tailoring/tasks/[id]/failure/route.ts",
 ]);
 
 describe("route session seam", () => {
@@ -67,6 +78,7 @@ describe("route session seam", () => {
   it("routes every session-authenticated handler through the wrapper", () => {
     const offenders = ROUTES.filter(({ path, source }) => {
       if (NON_SESSION_ROUTES.has(path)) return false;
+      if (LOCAL_TASK_ROUTES.has(path)) return !/withLocalTaskRoute/.test(source);
       // withAgentRoute went with the batch protocol. Every authenticated
       // route is a browser session now, so there is one wrapper to check.
       return !/with(Email)?SessionRoute/.test(source);

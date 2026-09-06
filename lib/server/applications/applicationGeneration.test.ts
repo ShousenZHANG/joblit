@@ -161,10 +161,10 @@ describe("acceptApplicationGeneration", () => {
       });
     });
 
-    it("rejects a strict-source payload written in a manual dialect", () => {
+    it.each(["server_batch", "local_ai"] as const)("rejects a %s payload written in a manual dialect", (source) => {
       const result = acceptApplicationGeneration({
         target: "resume",
-        source: "server_batch",
+        source,
         rawOutput: JSON.stringify({
           cv_summary: GOOD_SUMMARY,
           skills_selection: GOOD_SELECTION,

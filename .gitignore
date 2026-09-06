@@ -85,6 +85,7 @@ skills-lock.json
 # Everything Claude Code plugin (local tooling)
 everything-claude-code/
 install.cmd
+!/tools/companion/windows/Install.cmd
 
 # Playwright MCP page snapshots (written per browsing session, local only)
 .playwright-mcp/

@@ -58,6 +58,7 @@ export default defineConfig({
       "**/.next/**",
       // Deployment-order policy uses Node's built-in test runner.
       "tools/deploy/vercel-build.test.mjs",
+      "tools/companion/*.test.mjs",
     ],
   },
 });

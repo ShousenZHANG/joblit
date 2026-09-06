@@ -25,6 +25,7 @@ const STEPS = [
   { name: "dependency policy", command: "npm", args: ["run", "deps:policy"], cwd: repoRoot },
   { name: "dead code", command: "npm", args: ["run", "deadcode"], cwd: repoRoot },
   { name: "tests", command: "npm", args: ["run", "test"], cwd: repoRoot },
+  { name: "local companion", command: "node", args: ["--test", "tools/companion/*.test.mjs"], cwd: repoRoot },
 ];
 
 function run(step) {

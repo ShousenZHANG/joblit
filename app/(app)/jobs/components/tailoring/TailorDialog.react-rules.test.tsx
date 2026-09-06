@@ -8,6 +8,12 @@ vi.mock("@/app/GuideContext", () => ({
   useGuide: () => ({ markTaskComplete: vi.fn() }),
 }));
 
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { id: "test-user" } } }) }));
+vi.mock("@/lib/client/localTailoring/companionClient", async (original) => ({
+  ...await original<typeof import("@/lib/client/localTailoring/companionClient")>(),
+  accountFingerprint: async () => "a".repeat(64),
+}));
+
 import messages from "@/messages/en.json";
 import { TailorDialog } from "./TailorDialog";
 import { useTailorReviewController } from "../../hooks/useTailorReviewController";

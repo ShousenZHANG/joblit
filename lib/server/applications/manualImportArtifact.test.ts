@@ -116,6 +116,18 @@ describe("manual import artifact builder", () => {
     );
   });
 
+  it("records the companion as local AI while accepting only the current resume contract", () => {
+    const input = { target: "resume" as const, source: "local_ai" as const, promptMetaHash: "companion-prompt", renderInput, profile, job };
+    const accepted = buildManualImportArtifact({ ...input, modelOutput: JSON.stringify({ cvSummary: SUMMARY, skillsSelection: SELECTION }) });
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+    expect(accepted.aiContent.source).toBe("local_ai");
+    expect(accepted.aiContent.provenance?.resume).toMatchObject({ source: "local_ai", promptMetaHash: "companion-prompt" });
+    const rejected = buildManualImportArtifact({ ...input, modelOutput: JSON.stringify({ cv_summary: SUMMARY, skills_selection: SELECTION }) });
+    expect(rejected).toMatchObject({ ok: false, error: { code: "INVALID_AI_RESULT" } });
+    expect(resumeRender.renderResumeTex).toHaveBeenCalledTimes(1);
+  });
+
   it("builds a reproducible resume from canonical AI content and the Master Profile", () => {
     const result = buildManualImportArtifact({
       target: "resume",

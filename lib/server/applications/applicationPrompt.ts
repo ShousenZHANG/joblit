@@ -17,6 +17,7 @@ import { buildResumePromptSnapshot } from "@/lib/server/ai/resumePromptSnapshot"
 import { createRequestId } from "@/lib/server/api/errorResponse";
 import { prisma } from "@/lib/server/prisma";
 import { getActivePromptSkillRulesForUser } from "@/lib/server/promptRuleTemplates";
+import type { PromptSkillRuleSet } from "@/lib/server/ai/promptSkills";
 import { getResumeProfile } from "@/lib/server/resumeProfile";
 import { marketStringToResumeLocale } from "@/lib/shared/market";
 
@@ -125,6 +126,19 @@ export async function buildApplicationPromptForUser(input: {
   const [rules] = await Promise.all([
     getActivePromptSkillRulesForUser(input.userId),
   ]);
+  return buildApplicationPromptFromSources({ target: parsed.data.target, profile, job, rules });
+}
+
+/** Reconstruct the same prompt from an already owned snapshot. Local-task
+ * acceptance uses this with transaction-locked sources, so its final fence
+ * cannot drift from the prompt issued by the session endpoint. */
+export async function buildApplicationPromptFromSources({ target, profile, job, rules }: {
+  target: "resume" | "cover";
+  profile: NonNullable<Awaited<ReturnType<typeof getResumeProfile>>>;
+  job: { title: string; company: string | null; description: string | null; market: string };
+  rules: PromptSkillRuleSet;
+}): Promise<ApplicationPromptPayload> {
+  const locale = marketStringToResumeLocale(job.market);
   const candidate = buildResumePromptSnapshot(profile);
   const baseLatestBullets = candidate.experiences?.[0]?.bullets ?? [];
 
@@ -139,7 +153,7 @@ export async function buildApplicationPromptForUser(input: {
 
   const instructions = buildV2SystemPrompt(rules, locale);
   const promptInput =
-    parsed.data.target === "resume"
+    target === "resume"
       ? buildV2ResumeUserPrompt({
           target: "resume",
           rules,
@@ -169,7 +183,7 @@ export async function buildApplicationPromptForUser(input: {
   }
 
   const promptMeta = buildPromptMeta({
-    target: parsed.data.target,
+    target,
     ruleSetId: rules.id,
     resumeSnapshotUpdatedAt: profile.updatedAt.toISOString(),
     locale,
@@ -189,11 +203,11 @@ export async function buildApplicationPromptForUser(input: {
     },
     promptMeta,
     expectedJsonShape: JSON.stringify(
-      getExpectedJsonShapeForTarget(parsed.data.target),
+      getExpectedJsonShapeForTarget(target),
       null,
       2,
     ),
-    expectedJsonSchema: getExpectedJsonSchemaForTarget(parsed.data.target),
+    expectedJsonSchema: getExpectedJsonSchemaForTarget(target),
     promptVersion: "v4-application-proposal",
     snapshotBinding: {
       resumeProfileId: profile.id,

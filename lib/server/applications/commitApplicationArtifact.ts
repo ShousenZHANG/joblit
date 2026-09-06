@@ -118,6 +118,13 @@ export type CommitInput = CommitBaseInput & {
    * mutation lock, preserving whichever target this commit does not carry.
    */
   mergeTarget?: CommitTarget;
+  /** A caller's scoped receipt must be fenced and recorded under the same
+   * JOBA transaction as the Application. Throwing rolls back both writes.
+   * External I/O belongs outside these callbacks. */
+  receipt?: {
+    assertCurrent: (tx: Prisma.TransactionClient) => Promise<void>;
+    record: (tx: Prisma.TransactionClient, result: Extract<CommitResult, { kind: "committed" }>) => Promise<void>;
+  };
 };
 
 export type CommitResult =
@@ -492,6 +499,7 @@ async function commitInTransaction(
   // only ever ordered this path against the batch.
   const loaded = await loadCommitApplication(tx, input);
   if (loaded.kind === "job_missing") return loaded;
+  await input.receipt?.assertCurrent(tx);
   if (hasExpectedHashConflict(input, loaded.existing)) {
     return { kind: "stale_write" as const };
   }
@@ -511,7 +519,7 @@ async function commitInTransaction(
   if (renderContextFence.kind === "mismatched") {
     return { kind: "stale_render_context" as const };
   }
-  return persistResolvedCommit(
+  const committed = await persistResolvedCommit(
     tx,
     input,
     artifacts,
@@ -520,6 +528,8 @@ async function commitInTransaction(
     resolved,
     renderContextFence.current,
   );
+  await input.receipt?.record(tx, { ...committed, urls: uploadBundle.urls });
+  return committed;
 }
 
 async function persistResolvedCommit(

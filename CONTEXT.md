@@ -35,6 +35,10 @@ The artifact produced by **tailoring** the Master Resume Profile to a specific J
 
 Distinct from **Job**: Job is the role, Application is what the user submits *to* the role.
 
+### Local Tailoring Task
+
+One user's request to generate one Application document for one Job using their local model account. It has its own progress and terminal result, independent of whether the user currently has Tailor open. Closing Tailor does not cancel the request.
+
 ### Application Artifact (`ApplicationArtifact`)
 
 A durable lifecycle record for one Application PDF or TeX Blob. It tracks the

@@ -55,8 +55,8 @@ function snapshotToDraft(
 /**
  * Own the single Jobs-page tailoring dialog.
  *
- * The dialog is one surface for one job: copy a prompt, paste the result back,
- * edit it, publish it. This hook holds only what outlives a single step — which
+ * The dialog is one surface for one job: generate a PDF, edit it, and publish
+ * changes. This hook holds only what outlives a single step — which
  * job is open, the loaded Application, and the projection back into the jobs
  * query cache once a PDF is published.
  */
@@ -204,9 +204,11 @@ export function useTailorReviewController() {
       applicationId: string;
       jobId: string;
       target: TailorTarget;
+      source?: ReviewDraftSource;
     }): Promise<boolean> => {
+      const source = input.source ?? "manual_import";
       markTaskComplete("generate_first_pdf");
-      rememberSource(input.jobId, input.target, "manual_import");
+      rememberSource(input.jobId, input.target, source);
       void invalidateActiveJobsQueries(queryClient);
       // The import response carries the Application but not the candidate's
       // skill bank, and the review panel cannot name a single selected skill
@@ -215,7 +217,7 @@ export function useTailorReviewController() {
       return loadDraft({
         applicationId: input.applicationId,
         jobId: input.jobId,
-        source: "manual_import",
+        source,
       });
     },
     [loadDraft, markTaskComplete, queryClient, rememberSource],

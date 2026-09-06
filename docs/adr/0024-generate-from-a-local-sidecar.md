@@ -1,6 +1,6 @@
 # ADR-0024: Generate from a local sidecar the browser triggers
 
-- Status: Accepted
+- Status: Browser integration superseded by [ADR-0025](./0025-paired-local-tailoring-tasks.md); retained as historical context for the operator CLI.
 - Date: 2026-08-30
 - Does **not** supersede ADR-0015 (no server-side model keys) or ADR-0023
   (tailor the summary and the skills only). Both hold unchanged, and this

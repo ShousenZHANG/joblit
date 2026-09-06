@@ -187,6 +187,43 @@ afterEach(() => {
 });
 
 describe("commitApplicationArtifact", () => {
+  it("fences a scoped receipt under JOBA before any application write and records it in that transaction", async () => {
+    const events: string[] = [];
+    lock.acquireApplicationMutationLock.mockImplementationOnce(async () => { events.push("lock"); });
+    const assertCurrent = vi.fn(async (_tx: unknown) => { events.push("fence"); });
+    store.upsert.mockImplementationOnce(async () => { events.push("application"); return { id: "application-1" }; });
+    const record = vi.fn(async (_tx: unknown, _result: unknown) => { events.push("receipt"); });
+    const result = await commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact], receipt: { assertCurrent, record } });
+    expect(result.kind).toBe("committed");
+    expect(events).toEqual(["lock", "fence", "application", "receipt"]);
+    expect(record.mock.calls[0]?.[0]).toBe(assertCurrent.mock.calls[0]?.[0]);
+    expect(record).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ applicationId: "application-1", urls: { resume: "https://blob.example/new.pdf" } }));
+    expect(database.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("a cancelled or superseded receipt refuses the application write and retires the staged upload", async () => {
+    const record = vi.fn();
+    await expect(commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact], receipt: {
+      assertCurrent: async () => { throw new Error("task cancelled"); }, record,
+    } })).rejects.toThrow("task cancelled");
+    expect(store.upsert).not.toHaveBeenCalled(); expect(record).not.toHaveBeenCalled();
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalledWith(expect.objectContaining({ artifactIds: ["artifact-1"] }));
+  });
+
+  it("does not report success if its atomic receipt write fails", async () => {
+    let committed = false;
+    database.transaction.mockImplementationOnce(async fn => {
+      const result = await fn({ application: store, job: jobStore, $executeRaw: database.executeRaw, $queryRaw: database.queryRaw });
+      committed = true;
+      return result;
+    });
+    await expect(commitApplicationArtifact({ ...BASE, artifacts: [resumeArtifact], receipt: {
+      assertCurrent: async () => {}, record: async () => { throw new Error("receipt unavailable"); },
+    } })).rejects.toThrow("receipt unavailable");
+    expect(committed).toBe(false);
+    expect(lifecycle.retireStagedArtifacts).toHaveBeenCalled();
+  });
+
   it.each([
     ["resume", resumeArtifact],
     ["cover", coverArtifact],

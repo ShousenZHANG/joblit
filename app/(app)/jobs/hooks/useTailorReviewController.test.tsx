@@ -222,7 +222,7 @@ describe("useTailorReviewController", () => {
     );
   });
 
-  it("re-reads the snapshot after an import so the skill bank is present", async () => {
+  it.each([undefined, "ai"] as const)("re-reads the snapshot and keeps the %s generation source", async (source) => {
     const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
     vi.stubGlobal("fetch", fetchMock);
     const { result } = renderHook(() => useTailorReviewController());
@@ -236,14 +236,15 @@ describe("useTailorReviewController", () => {
         applicationId: APPLICATION_ID,
         jobId: JOB_ID,
         target: "resume",
+        source,
       });
     });
 
     expect(loaded).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(result.current.draft?.source).toBe("manual_import");
+    expect(result.current.draft?.source).toBe(source ?? "manual_import");
     expect(result.current.tailorSourceByJob[JOB_ID]).toEqual({
-      cv: "manual_import",
+      cv: source ?? "manual_import",
     });
   });
 

@@ -109,26 +109,17 @@ Fetching runs in the repository's [JobSpy GitHub Actions workflow](./.github/wor
 
 ### Local AI generation
 
-The **Generate PDF with AI** button connects to a service running on your computer. That service invokes Hermes with your model account, checks the output, and returns it to the browser. The browser then imports and publishes the document through the web app.
+Open **Tailor** and download the Windows assistant. Extract the ZIP and double-click **Install.cmd**. Setup installs a private runtime and, if needed, Hermes. Existing Hermes installations and model accounts are reused; no repository checkout or database configuration is needed on the user's computer.
 
-This is currently a **single-operator setup**: the local service needs database access to the same Joblit instance you are using. Signing into the website alone does not configure generation.
+1. Click **Start & connect** in Tailor. Accept the browser's request to open Joblit and connect to the local assistant when prompted.
+2. If the model account needs authorization, follow the login instructions shown in Tailor.
+3. Choose Resume or Cover letter, then click **Generate PDF with AI**. Connecting alone never starts generation.
 
-Before starting it:
+The assistant runs Hermes locally. Joblit checks the output against the user's current job, profile and rules before publishing the PDF. You can close Tailor or refresh while a task runs, then return to the same job to recover its progress. **Cancel** stops the local generation; closing the dialog does not. Completed documents remain available for editing and downloading.
 
-- Install and authenticate the Hermes CLI for the provider used by the [generation adapter](./tools/tailor/generateTailoring.mjs). The adapter defines the current provider and default model; it does not automatically use an arbitrary Hermes configuration.
-- Keep the full `npm ci` installation, including development dependencies used by the local tools.
-- Configure the repository's `.env` with access to the same database as the web app.
-- If Hermes is not found automatically, set `HERMES_EXE` to its executable path. On Windows, use the executable rather than a `.cmd` shim.
+The assistant starts on demand. Optional Windows sign-in startup and a stop control are available from **Joblit local assistant** in the Start menu. Your computer must remain awake and online while generating. The initial integration uses Hermes's `openai-codex` provider; a successful login does not guarantee access to every model or remaining account quota.
 
-From the repository root, in a separate terminal:
-
-```bash
-node --env-file=.env --experimental-loader ./tools/evals/aliasLoader.mjs tools/tailor/serve.mjs
-```
-
-On Windows, you can instead open [`tools/tailor/start-sidecar.cmd`](./tools/tailor/start-sidecar.cmd). Leave the process running while generating. The browser connects to `http://127.0.0.1:8791`; it cannot start the process for you.
-
-The service binds only to loopback and has no per-request authentication. Keep it local. Its allowed browser origins are defined in [`serve.mjs`](./tools/tailor/serve.mjs); a custom deployment domain needs an explicit allowlist change. See [ADR-0024](./docs/adr/0024-generate-from-a-local-sidecar.md) for the generation flow and its current limits.
+For local development, run `node tools/companion/app.mjs` or [`start-sidecar.cmd`](./tools/tailor/start-sidecar.cmd). The installed assistant registers the browser launch protocol. It listens on `127.0.0.1:8791`, requires pairing for control requests and accepts only configured Joblit origins. Custom deployment domains require a coordinated allowlist change. See [the local assistant decision](./docs/adr/0025-paired-local-tailoring-tasks.md) for task authorization and recovery.
 
 ## How it fits together
 
@@ -136,8 +127,8 @@ The service binds only to loopback and has no per-request authentication. Keep i
 flowchart LR
   Browser[Browser] <--> Web[Next.js web app]
   Web <--> DB[(Neon PostgreSQL)]
-  Browser <--> Local[Local generation service]
-  Local -->|Read job and profile| DB
+  Browser <-->|Pair and observe| Local[Local assistant]
+  Local <-->|Task-scoped authorization| Web
   Local --> Hermes[Hermes and your model account]
   Web --> Renderer[LaTeX renderer]
   Web --> Blob[Published files in Vercel Blob]
@@ -154,7 +145,7 @@ flowchart LR
 | Command | Purpose |
 | --- | --- |
 | `npm run dev` | Start the development server |
-| `npm run verify` | Run type checks, lint, dependency policy, dead-code checks and Vitest |
+| `npm run verify` | Run type checks, lint, dependency policy, dead-code checks, Vitest and local-assistant tests |
 | `npm run build` | Build the web app for production |
 | `npm start` | Serve a production build |
 | `npm test` | Run Vitest once |
@@ -214,7 +205,7 @@ The repository includes a Vercel deployment path with Neon and Vercel Blob. Conf
 | Sign-in fails or redirects to the wrong host | OAuth callback URLs, both provider credentials and `NEXTAUTH_URL` |
 | Fetch cannot start | Workflow dispatch permissions, repository settings and `GITHUB_REF` |
 | Fetch starts but no results arrive | Actions logs, the public callback URL and the matching `FETCH_RUN_SECRET` |
-| The local generation service is unavailable | Start the sidecar, keep it running, and check port 8791 and the allowed browser origin |
+| The local assistant is unavailable | Use **Launch and connect** in Tailor, allow the browser to open Joblit, and check that port 8791 is available. First-time users can download the installer from the same panel |
 | Hermes cannot start or authenticate | The installed executable, `HERMES_EXE`, model-account authentication and the adapter's provider configuration |
 | PDF publication fails | Render-service configuration and `BLOB_READ_WRITE_TOKEN`; retry Publish if the draft was already imported |
 

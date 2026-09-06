@@ -36,6 +36,14 @@ vi.mock("@/app/FetchStatusContext", () => ({
   useFetchStatus: () => fetchStatusMock.state,
 }));
 
+vi.mock("next-auth/react", () => ({
+  useSession: () => ({ data: { user: { id: "jobs-test-user" } } }),
+}));
+vi.mock("@/lib/client/localTailoring/companionClient", async (original) => ({
+  ...await original<typeof import("@/lib/client/localTailoring/companionClient")>(),
+  accountFingerprint: async () => "a".repeat(64),
+}));
+
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
     push: vi.fn(),
