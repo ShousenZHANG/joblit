@@ -74,17 +74,42 @@ describe("ApplicationDemo", () => {
     expect(evidence.tagName).toBe("MARK");
     expect(evidence.parentElement).toHaveFocus();
     expect(scroll).toHaveBeenCalledWith(expect.objectContaining({ block: "center" }));
+    expect(screen.getByRole("dialog", { name: "Job description" })).toContainElement(evidence);
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("button", { name: "View in JD" })).toHaveFocus();
     await user.clear(search);
-    const descriptionViewport = screen.getByRole("region", { name: "Job description" }).parentElement!;
-    descriptionViewport.scrollTop = 300;
     await user.selectOptions(screen.getByRole("combobox", { name: "Job status" }), "APPLIED");
-    expect(descriptionViewport.scrollTop).toBe(0);
     expect(within(jobList()).getAllByRole("listitem")).toHaveLength(2);
     await user.click(filterButtons().getByRole("button", { name: "Applied" }));
     expect(within(jobList()).getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByRole("combobox", { name: "Job status" })).toHaveValue("APPLIED");
     await user.click(filterButtons().getByRole("button", { name: /New/ }));
     expect(within(jobList()).getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("keeps a useful job overview and opens complete details only on request without changing the selected job", async () => {
+    const user = userEvent.setup();
+    render(demo());
+    const overview = screen.getByRole("region", { name: "Job description" });
+    expect(within(overview).getByText(DEMO_JOBS[0].intro)).toBeVisible();
+    expect(within(overview).getByText(DEMO_JOBS[0].responsibilities[0])).toBeVisible();
+    expect(within(overview).queryByText(DEMO_JOBS[0].closing)).not.toBeInTheDocument();
+    const opener = screen.getByRole("button", { name: "Read full description" });
+    await user.click(opener);
+    const modal = screen.getByRole("dialog", { name: "Job description" });
+    for (const responsibility of DEMO_JOBS[0].responsibilities) expect(within(modal).getByText(responsibility)).toBeVisible();
+    expect(within(modal).getByText(DEMO_JOBS[0].source)).toBeVisible();
+    expect(within(modal).getByText(DEMO_JOBS[0].closing)).toBeVisible();
+    expect(within(modal).getByRole("heading", { name: "Job description" })).toHaveFocus();
+    expect(within(modal).getByRole("region", { name: "Job description" })).toHaveAttribute("tabindex", "0");
+    expect(within(modal).queryByRole("tablist")).not.toBeInTheDocument();
+    expect(await axe(modal)).toHaveNoViolations();
+    await user.keyboard("{Escape}");
+    expect(opener).toHaveFocus();
+    expect(screen.getByRole("combobox", { name: "Job status" })).toHaveValue("NEW");
+    expect(within(jobList()).getByRole("button", { name: /Application Developer/ })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Tailor" }));
+    expect(screen.getByRole("dialog", { name: "Tailor this application" })).toBeVisible();
   });
 
   it("opens Tailor inside Jobs and prepares each document independently with truthful PDF and review content", async () => {

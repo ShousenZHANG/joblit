@@ -60,7 +60,7 @@
 .toolbar > .sampleBadge { margin-left: auto; }
 .reset { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 44px; min-height: 44px; padding: 9px 8px; border: 0; border-radius: 10px; background: transparent; color: var(--demo-muted); font-size: 12px; }
 .reset:hover { color: var(--demo-text); background: var(--demo-raised); }
-.jobsPanel { display: grid; grid-template-columns: minmax(265px, .32fr) minmax(0, .68fr); height: 730px; min-height: 0; }
+.jobsPanel { display: grid; grid-template-columns: minmax(265px, .32fr) minmax(0, .68fr); min-height: 0; }
 .jobsPanel[hidden], .fetchPanel[hidden], .resumePanel[hidden] { display: none; }
 .sidebar { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--demo-border); }
 .search { padding: 16px; border-bottom: 1px solid var(--demo-border); }
@@ -71,7 +71,7 @@
 .filterBar button:hover { background: var(--demo-raised); }
 .filterBar button[aria-pressed="true"] { background: var(--demo-tailor); color: #fff; }
 .filterBar button > span { display: inline-grid; min-width: 19px; height: 19px; place-items: center; padding-inline: 4px; border-radius: 999px; background: #ffffff30; font-size: 11px; }
-.jobList { display: grid; align-content: start; gap: 10px; min-height: 0; margin: 0; padding: 14px; overflow-y: auto; scrollbar-width: thin; list-style: none; }
+.jobList { display: grid; align-content: start; gap: 10px; min-height: 0; margin: 0; padding: 14px; list-style: none; }
 .jobList > li { min-width: 0; }
 .jobCard { display: flex; flex-direction: column; width: 100%; padding: 16px; border: 1px solid color-mix(in srgb, var(--demo-border) 70%, var(--demo-panel)); border-left: 3px solid transparent; border-radius: 16px; background: var(--demo-panel); color: var(--demo-text); text-align: left; transition: background-color .15s, border-color .15s; }
 .jobCard:hover { background: var(--demo-raised); }
@@ -83,6 +83,7 @@
 .jobCard > strong { font-size: 14px; font-weight: 650; line-height: 1.45; overflow-wrap: anywhere; }
 .qualifier { margin-top: 4px; color: var(--demo-muted); font-size: 12px; line-height: 1.6; }
 .company { margin-top: 10px; font-size: 12px; line-height: 1.6; }
+.cardCity { display: none; color: var(--demo-muted); font-weight: 400; }
 .location { display: flex; align-items: flex-start; gap: 5px; margin-top: 5px; color: var(--demo-muted); font-size: 11px; line-height: 1.6; }
 .location svg { margin-top: 2px; }
 .listMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 11px; color: var(--demo-muted); font-size: 11px; line-height: 1.5; }
@@ -91,7 +92,7 @@
 .listEmpty, .detailEmpty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 48px 22px; color: var(--demo-muted); text-align: center; }
 .listEmpty > p, .detailEmpty h3 { color: var(--demo-text); font-size: 16px; font-weight: 600; }
 .listEmpty > span, .detailEmpty > p { max-width: 330px; font-size: 13px; line-height: 1.7; }
-.detailEmpty { min-height: 560px; }
+.detailEmpty { min-height: 330px; }
 .detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .detailHeader { flex-shrink: 0; padding: 25px 28px 17px; border-bottom: 1px solid var(--demo-border); }
 .mobileBack { display: none; }
@@ -122,7 +123,7 @@
 .textButton:hover { text-decoration: underline; text-underline-offset: 4px; }
 .deleteButton { display: inline-grid; width: 36px; height: 36px; place-items: center; flex-shrink: 0; margin-left: auto; border: 1px solid var(--demo-border); border-radius: 10px; background: var(--demo-panel); color: var(--demo-muted); }
 .deleteButton:hover { background: color-mix(in srgb, #c84545 8%, var(--demo-panel)); color: #c84545; }
-.detailBody { min-height: 0; padding: 23px 28px 34px; overflow-y: auto; scrollbar-width: thin; }
+.detailBody { min-height: 0; padding: 23px 28px 34px; }
 .requirements { padding-bottom: 23px; border-bottom: 1px solid var(--demo-border); }
 .requirements h4, .jobDescription h4 { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; font-size: 14px; font-weight: 650; line-height: 1.5; }
 .requirements h4 svg { color: var(--demo-muted); }
@@ -139,6 +140,12 @@
 .technologyCard ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .technologyCard li { padding: 4px 9px; border: 1px solid color-mix(in srgb, var(--demo-accent) 25%, var(--demo-panel)); border-radius: 999px; background: var(--demo-accent-wash); color: var(--demo-accent); font-size: 11px; line-height: 1.5; }
 .jobDescription { margin-top: 23px; }
+.descriptionHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.descriptionHeading h4 { margin: 0; }
+.readDescription { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 32px; padding: 4px 0 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--demo-accent); font-size: 12px; font-weight: 550; line-height: 1.5; }
+.readDescription:hover { text-decoration: underline; text-underline-offset: 4px; }
+.fullDescription { margin: 0; }
+.fullDescription h3 { margin: 20px 0 12px; font-size: 17px; font-weight: 650; }
 .jobDescription p, .jobDescription li { color: var(--demo-muted); font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
 .jobDescription p { margin-bottom: 16px; }
 .jobDescription ul { display: grid; gap: 8px; margin: 15px 0 22px; padding-left: 19px; }
@@ -146,7 +153,7 @@
 .sourceQuote { margin-left: -12px; padding: 10px 12px; border: 1px solid transparent; border-radius: 9px; scroll-margin-top: 120px; }
 .sourceQuote[data-highlighted="true"] { border-color: var(--demo-blue-border); background: var(--demo-blue-wash); }
 .sourceQuote mark { background: transparent; color: var(--demo-text); }
-.fetchPanel, .resumePanel { display: grid; grid-template-columns: .9fr 1.1fr; align-items: start; gap: 48px; min-height: 650px; padding: 48px; background: var(--demo-raised); }
+.fetchPanel, .resumePanel { display: grid; grid-template-columns: .9fr 1.1fr; align-items: start; gap: 48px; padding: 48px; background: var(--demo-raised); }
 .previewHeading h3 { margin: 20px 0 14px; font-size: 28px; font-weight: 650; line-height: 1.25; letter-spacing: -.035em; }
 .previewHeading > p { color: var(--demo-muted); font-size: 15px; line-height: 1.8; }
 .previewHeading > .textButton { margin-top: 14px; }
@@ -181,6 +188,7 @@
 .closeButton { display: inline-grid; width: 44px; height: 44px; place-items: center; flex-shrink: 0; margin: -4px -6px 0 0; border: 0; border-radius: 50%; background: transparent; color: var(--demo-muted); }
 .closeButton:hover { background: var(--demo-raised); color: var(--demo-text); }
 .dialogBody { min-height: 0; padding: 22px 26px 26px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.portalRoot .dialogBody:focus-visible { outline-offset: -4px; }
 .dialogBody > [role="tablist"] { margin-bottom: 18px; }
 .dialogBody > [role="tabpanel"] { gap: 14px; border-radius: 10px; }
 .generatePanel { border: 1px solid color-mix(in srgb, var(--demo-accent) 26%, var(--demo-panel)); border-radius: 15px; background: color-mix(in srgb, var(--demo-accent-wash) 48%, var(--demo-panel)); }
@@ -220,19 +228,6 @@
 @keyframes overlay-enter { from { opacity: 0; } to { opacity: 1; } }
 @keyframes dialog-enter { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
 
-@media (min-width: 960px) and (min-height: 740px) {
-  .sectionHeading { display: grid; grid-template-columns: 1fr 1fr; align-items: end; column-gap: 64px; max-width: none; margin-bottom: 24px; }
-  .sectionHeading .eyebrow { grid-column: 1; margin: 0 0 12px; }
-  .sectionHeading h2 { grid-column: 1; margin: 0; font-size: clamp(32px, 3vw, 44px); }
-  .sectionHeading .description { grid-column: 2; grid-row: 1 / 3; margin: 0; font-size: 15px; line-height: 1.7; }
-  .toolbar { min-height: 64px; padding-block: 8px; }
-  .jobsPanel { height: clamp(340px, calc(100svh - 480px), 580px); }
-  .fetchPanel, .resumePanel { height: clamp(340px, calc(100svh - 480px), 580px); min-height: 0; overflow-y: auto; padding: 28px 34px; gap: 32px; }
-  .demoDisclaimer { padding-block: 10px; }
-  .setupNote { margin-top: 12px; font-size: 11px; }
-  .detailHeader { padding-top: 19px; }
-}
-
 @media (max-width: 1050px) {
   .demoContent { width: calc(100% - 64px); }
   .jobsPanel { grid-template-columns: minmax(245px, .34fr) minmax(0, .66fr); }
@@ -251,6 +246,85 @@
   .experienceCard strong { font-size: 19px; }
   .fetchPanel, .resumePanel { gap: 30px; padding: 34px; }
 }
+
+/* An overview should never capture the landing page's scroll. Full job text
+   and generated documents use the explicit dialog, where scrolling is local. */
+@media (min-width: 701px) {
+  .demoContent { --demo-panel-height: clamp(354px, calc(100svh - 372px), 430px); }
+  .sectionHeading { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 0 48px; max-width: none; margin-bottom: 14px; }
+  .sectionHeading .eyebrow { grid-column: 1; margin: 0 0 6px; font-size: 12px; line-height: 1.4; letter-spacing: .07em; }
+  .sectionHeading h2 { grid-column: 1; margin: 0; font-size: clamp(28px, 2.45vw, 35px); line-height: 1.12; }
+  .sectionHeading .description { grid-column: 2; grid-row: 1 / 3; margin: 0; font-size: 13px; line-height: 1.65; }
+  .workspace { border-radius: 19px; }
+  .toolbar { min-height: 52px; gap: 15px; padding: 4px 16px; }
+  .brand { font-size: 16px; }
+  .brandMark { width: 30px; height: 30px; border-radius: 9px; }
+  .tabs button { min-height: 40px; padding: 6px 13px; font-size: 13px; }
+  .reset { min-height: 40px; padding-block: 6px; }
+  .sampleBadge { font-size: 12px; padding-block: 3px; }
+  .jobsPanel { height: auto; min-height: var(--demo-panel-height); grid-template-columns: minmax(285px, .32fr) minmax(0, .68fr); }
+  .search { padding: 8px 12px; }
+  .search input { height: 36px; font-size: 13px; }
+  .filterBar { padding: 4px 12px; gap: 4px; }
+  .filterBar button { min-height: 30px; padding: 3px 10px; }
+  .filterBar button > span { font-size: 12px; }
+  .jobList { gap: 6px; padding: 9px; overflow: visible; }
+  .jobCard { padding: 10px 12px; border-radius: 10px; }
+  .jobCardTop, .jobCard > .qualifier, .jobCard > .location, .jobCard > .listMeta { display: none; }
+  .jobCard > strong { font-size: 13px; line-height: 1.45; }
+  .jobCard .company { margin-top: 5px; font-size: 12px; line-height: 1.5; }
+  .cardCity { display: inline; }
+  .listFooter { padding: 5px 14px; font-size: 12px; line-height: 1.5; }
+  .detailHeader { padding: 12px 18px 10px; }
+  .titleRow { gap: 12px; }
+  .titleRow h3 { font-size: clamp(19px, 1.6vw, 23px); line-height: 1.2; letter-spacing: -.025em; }
+  .detailQualifier { margin-top: 3px; font-size: 12px; line-height: 1.5; }
+  .statusSelect { min-width: 90px; min-height: 32px; }
+  .statusSelect select { height: 30px; }
+  .jobMeta { margin-top: 6px; gap: 3px 7px; font-size: 12px; line-height: 1.5; }
+  .jobMeta > span + span::before { margin-right: 7px; }
+  .actionRow { gap: 6px; margin-top: 9px; padding-top: 0; border: 0; }
+  .actionRow > :is(button, a) { min-height: 32px; padding: 5px 10px; font-size: 12px; line-height: 20px; border-radius: 8px; }
+  .actionRow > .deleteButton { width: 32px; height: 32px; padding: 0; }
+  .detailBody { padding: 12px 18px 14px; overflow: visible; }
+  .requirements { padding-bottom: 12px; }
+  .requirements h4 { margin-bottom: 7px; font-size: 13px; line-height: 1.4; }
+  .requirementGrid { gap: 9px; }
+  .experienceCard, .technologyCard { padding: 8px 10px; border-radius: 9px; }
+  .experienceCard > p, .technologyCard > p { margin-bottom: 5px; font-size: 12px; line-height: 1.4; }
+  .experienceCard strong { font-size: 20px; line-height: 1.25; }
+  .sourceButton { min-height: 28px; padding: 3px 6px; font-size: 12px; line-height: 20px; }
+  .technologyCard ul { gap: 5px; }
+  .technologyCard li { padding: 2px 6px; font-size: 12px; line-height: 1.5; }
+  .detailBody .jobDescription { margin-top: 8px; }
+  .descriptionHeading { margin-bottom: 5px; }
+  .descriptionHeading h4 { font-size: 13px; line-height: 1.4; }
+  .detailBody .jobDescription p { margin: 0 0 7px; font-size: 13px; line-height: 1.6; }
+  .detailBody .jobDescription p:last-child { margin-bottom: 0; }
+  .readDescription { min-height: 28px; }
+  .demoDisclaimer { padding: 7px 16px; font-size: 12px; line-height: 1.5; }
+  .setupNote { margin-top: 8px; font-size: 12px; line-height: 1.4; }
+  .fetchPanel, .resumePanel { height: auto; min-height: var(--demo-panel-height); overflow: visible; grid-template-columns: .75fr 1.25fr; align-items: center; gap: 26px; padding: 18px 24px; }
+  .previewHeading h3 { margin: 12px 0 10px; font-size: 24px; }
+  .previewHeading > p { font-size: 13px; line-height: 1.7; }
+  .fetchCard, .profileCard { padding: 18px; border-radius: 12px; }
+  .fetchCard dl { gap: 14px; }
+  .fetchCard dd { margin-top: 4px; font-size: 14px; line-height: 1.6; }
+  .fetchCard > p { margin: 15px 0 12px; padding-top: 13px; }
+  .resumePanel { grid-template-columns: .65fr 1.35fr; }
+  .profileCard { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 14px 20px; }
+  .profileCard > header { grid-column: 1 / -1; padding-bottom: 12px; }
+  .profileCard h4 { font-size: 21px; }
+  .profileCard > header p { margin-top: 3px; }
+  .profileCard > section { margin: 0; }
+  .profileCard > section:last-child { grid-column: 1 / -1; }
+  .profileCard h5 { margin-bottom: 6px; }
+  .profileCard p, .profileCard .experience { font-size: 12px; line-height: 1.6; }
+  .profileCard .skills { gap: 4px; }
+  .profileCard .skills li { padding: 2px 6px; font-size: 12px; }
+  .profileCard .experience { gap: 5px; }
+}
+
 @media (max-width: 700px) {
   .demoContent { width: calc(100% - 32px); }
   .sectionHeading { margin-bottom: 28px; }
@@ -289,6 +363,8 @@
   .experienceCard strong { font-size: 23px; }
   .technologyCard li { font-size: 12px; }
   .jobDescription p, .jobDescription li, .jobDescription h4, .jobDescription h5 { font-size: 15px; }
+  .descriptionHeading { align-items: flex-start; flex-wrap: wrap; gap: 0 10px; }
+  .readDescription { min-height: 44px; padding-left: 0; }
   .sourceQuote { scroll-margin-top: 105px; }
   .fetchPanel, .resumePanel { grid-template-columns: 1fr; gap: 25px; min-height: 0; padding: 25px 20px; }
   .previewHeading h3 { font-size: 26px; }

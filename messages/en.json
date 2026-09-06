@@ -893,6 +893,8 @@
       "viewInJd": "View in JD",
       "sourceFound": "The experience requirement is highlighted in the sample job description.",
       "jobDescription": "Job description",
+      "readFullJob": "Read full description",
+      "closeJobDescription": "Close job description",
       "aboutYou": "About you",
       "readOnlySample": "Read-only sample",
       "fetchTitle": "Find roles. Bring them into focus.",

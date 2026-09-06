@@ -27,25 +27,22 @@
   transform-origin: 50% 50%;
   transform-style: preserve-3d;
 }
-.chapter[data-chapter-layout="pinned"] { min-height: calc(100svh + 140px); }
-.chapter[data-chapter-layout="pinned"][data-chapter-closing="true"] { min-height: 100svh; }
-.chapter[data-chapter-layout="pinned"] > .stage {
-  position: sticky;
-  top: 104px;
+.chapter[data-chapter-layout="screen"] { min-height: 100svh; scroll-margin-top: 0; }
+.chapter[data-chapter-layout="screen"] > .stage {
   display: flex;
   align-items: center;
-  min-height: calc(100svh - 128px);
-  padding-block: 24px;
+  min-height: 100svh;
+  padding-block: 128px 48px;
 }
 @media (max-width: 959px), (max-height: 739px) {
   .stage { padding-block: 40px; perspective: none; }
-  .chapter[data-chapter-layout="pinned"] { min-height: 0; }
-  .chapter[data-chapter-layout="pinned"] > .stage { position: relative; top: auto; min-height: 0; perspective: none; }
+  .chapter[data-chapter-layout="screen"] { min-height: 0; scroll-margin-top: 104px; }
+  .chapter[data-chapter-layout="screen"] > .stage { min-height: 0; padding-block: 40px; perspective: none; }
   .camera, .layer { transform: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .stage { perspective: none; }
-  .chapter[data-chapter-layout="pinned"] { min-height: 0; }
-  .chapter[data-chapter-layout="pinned"] > .stage { position: relative; top: auto; min-height: 0; perspective: none; }
+  .chapter[data-chapter-layout="screen"] { min-height: 0; scroll-margin-top: 104px; }
+  .chapter[data-chapter-layout="screen"] > .stage { min-height: 0; padding-block: 56px; perspective: none; }
   .camera, .layer { transform: none !important; }
 }

@@ -893,6 +893,8 @@
       "viewInJd": "定位 JD 原文",
       "sourceFound": "已在示例职位描述中定位并高亮经验要求原文。",
       "jobDescription": "职位描述",
+      "readFullJob": "查看完整职位",
+      "closeJobDescription": "关闭职位描述",
       "aboutYou": "任职要求",
       "readOnlySample": "只读示例",
       "fetchTitle": "找到职位，再集中筛选。",

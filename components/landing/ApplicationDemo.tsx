@@ -37,6 +37,7 @@ export function ApplicationDemo() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [prepared, setPrepared] = useState<PreparedDocuments>({});
   const [dialogJob, setDialogJob] = useState<DemoJob | null>(null);
+  const [dialogMode, setDialogMode] = useState<"tailor" | "description">("tailor");
   const [target, setTarget] = useState<DocumentTarget>("resume");
   const [phase, setPhase] = useState<"review" | "publish" | "none">("none");
   const [announcement, setAnnouncement] = useState("");
@@ -44,7 +45,6 @@ export function ApplicationDemo() {
   // workspace. This preserves both its semantic color tokens and modal focus.
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
   const sourceRef = useRef<HTMLParagraphElement>(null);
-  const detailBodyRef = useRef<HTMLDivElement>(null);
   const detailHeaderRef = useRef<HTMLDivElement>(null);
   const detailTitleRef = useRef<HTMLHeadingElement>(null);
   const jobCardRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -59,10 +59,6 @@ export function ApplicationDemo() {
   const job = visibleJobs.find((item) => item.id === selectedId) ?? visibleJobs[0];
   const hasDocument = Boolean(dialogJob && prepared[dialogJob.id]?.[target]);
   const samplePdf = dialogJob ? `/demo/${dialogJob.id}-${target}.pdf` : undefined;
-
-  useEffect(() => {
-    if (detailBodyRef.current) detailBodyRef.current.scrollTop = 0;
-  }, [job?.id]);
 
   useEffect(() => {
     const pending = pendingPaneFocus.current;
@@ -93,17 +89,19 @@ export function ApplicationDemo() {
     setMobilePane("list");
   }
 
-  function revealSource() {
+  function openJobDescription(event: MouseEvent<HTMLButtonElement>, highlightSource = false) {
     if (!job) return;
-    setHighlightedId(job.id);
-    sourceRef.current?.focus({ preventScroll: true });
-    sourceRef.current?.scrollIntoView({ block: "center", behavior: reducedMotion ? "instant" : "smooth" });
-    setAnnouncement(t("sourceFound"));
+    openerRef.current = event.currentTarget;
+    setHighlightedId(highlightSource ? job.id : null);
+    setDialogMode("description");
+    setDialogJob(job);
+    if (highlightSource) setAnnouncement(t("sourceFound"));
   }
 
   function openTailor(event: MouseEvent<HTMLButtonElement>, nextTarget: DocumentTarget) {
     if (!job) return;
     openerRef.current = event.currentTarget;
+    setDialogMode("tailor");
     setTarget(nextTarget);
     setPhase("none");
     setDialogJob(job);
@@ -178,7 +176,7 @@ export function ApplicationDemo() {
                   <span className={styles.jobCardTop}><span className={styles.statusBadge} data-status={statuses[item.id] ?? "NEW"}>{t(`statuses.${statuses[item.id] ?? "NEW"}`)}</span><span>{t("hoursAgo", { count: Number.parseInt(item.age) })}</span></span>
                   <strong>{item.title}</strong>
                   {item.qualifier && <span className={styles.qualifier}>{item.qualifier}</span>}
-                  <span className={styles.company}>{item.company}</span>
+                  <span className={styles.company}>{item.company}<span className={styles.cardCity}> · {item.location.split(",")[0]}</span></span>
                   <span className={styles.location}><MapPin size={13} aria-hidden="true" />{item.location}</span>
                   <span className={styles.listMeta}>{t("fullTime")}<span aria-hidden="true">·</span>{item.level}<span className={styles.sourceBadge}>{t("sampleSource")}</span></span>
                 </button>
@@ -208,20 +206,17 @@ export function ApplicationDemo() {
                   <button type="button" className={styles.deleteButton} aria-label={t("removeJob")} title={t("removeJob")} onClick={() => { setDeletedIds((current) => [...current, job.id]); setAnnouncement(t("removedStatus")); setMobilePane("list"); }}><Trash2 size={17} aria-hidden="true" /></button>
                 </div>
               </div>
-              <div ref={detailBodyRef} className={styles.detailBody}>
+              <div className={styles.detailBody}>
                 <section className={styles.requirements} aria-labelledby={`${id}-requirements`}>
                   <h4 id={`${id}-requirements`}><ListChecks size={17} aria-hidden="true" />{t("requirements")}</h4>
                   <div className={styles.requirementGrid}>
-                    <div className={styles.experienceCard}><p><CalendarClock size={15} aria-hidden="true" />{t("requiredExperience")}</p><div><strong>{job.requirement}</strong><button type="button" className={styles.sourceButton} onClick={revealSource} aria-controls={`${id}-source`}>{t("viewInJd")}<ArrowDown size={15} aria-hidden="true" /></button></div></div>
+                    <div className={styles.experienceCard}><p><CalendarClock size={15} aria-hidden="true" />{t("requiredExperience")}</p><div><strong>{job.requirement}</strong><button type="button" className={styles.sourceButton} onClick={(event) => openJobDescription(event, true)} aria-haspopup="dialog">{t("viewInJd")}<ArrowDown size={15} aria-hidden="true" /></button></div></div>
                     <div className={styles.technologyCard}><p>{t("technology")}</p><ul>{job.technology.map((skill) => <li key={skill}>{skill}</li>)}</ul></div>
                   </div>
                 </section>
                 <section className={styles.jobDescription} aria-labelledby={`${id}-description`}>
-                  <h4 id={`${id}-description`}>{t("jobDescription")}</h4>
-                  <p>{job.intro}</p><ul>{job.responsibilities.map((item) => <li key={item}>{item}</li>)}</ul>
-                  <h5>{t("aboutYou")}</h5>
-                  <p id={`${id}-source`} ref={sourceRef} tabIndex={-1} className={styles.sourceQuote} data-highlighted={highlightedId === job.id}>{highlightedId === job.id ? <mark>{job.source}</mark> : job.source}</p>
-                  <p>{job.closing}</p>
+                  <div className={styles.descriptionHeading}><h4 id={`${id}-description`}>{t("jobDescription")}</h4><button type="button" className={styles.readDescription} onClick={(event) => openJobDescription(event)} aria-haspopup="dialog">{t("readFullJob")}<ArrowUpRight size={14} aria-hidden="true" /></button></div>
+                  <p>{job.intro}</p><p>{job.responsibilities[0]}</p>
                 </section>
               </div>
             </> : <div className={styles.detailEmpty}><ListChecks size={28} aria-hidden="true" /><h3>{t("emptyTitle")}</h3><p>{!jobs.length ? t("emptyRemoved") : query ? t("emptySearch") : t("emptyStatus")}</p><button type="button" className={styles.secondaryButton} onClick={showExampleResults}>{jobs.length ? t("viewExampleResults") : t("restoreSamples")}</button></div>}
@@ -251,12 +246,24 @@ export function ApplicationDemo() {
         <Dialog.Root open={dialogJob !== null} onOpenChange={(open) => { if (!open) setDialogJob(null); }}>
           {portalContainer && <Dialog.Portal container={portalContainer}>
             <Dialog.Overlay className={styles.dialogOverlay} />
-            <Dialog.Content className={styles.dialog} onPointerDownOutside={(event) => event.preventDefault()} onOpenAutoFocus={(event) => { event.preventDefault(); dialogTitleRef.current?.focus(); }} onCloseAutoFocus={(event) => { event.preventDefault(); openerRef.current?.focus({ preventScroll: true }); }}>
+            <Dialog.Content className={styles.dialog} onPointerDownOutside={(event) => event.preventDefault()} onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              if (dialogMode === "description" && highlightedId === dialogJob?.id) {
+                sourceRef.current?.focus({ preventScroll: true });
+                sourceRef.current?.scrollIntoView({ block: "center", behavior: "instant" });
+              } else dialogTitleRef.current?.focus();
+            }} onCloseAutoFocus={(event) => { event.preventDefault(); openerRef.current?.focus({ preventScroll: true }); }}>
               <header className={styles.dialogHeader}>
-                <div><p className={styles.eyebrow}>{t("sample")}</p><Dialog.Title ref={dialogTitleRef} tabIndex={-1}><Sparkles size={20} aria-hidden="true" />{t("dialogTitle")}</Dialog.Title><Dialog.Description>{dialogJob?.title}<span aria-hidden="true"> · </span>{dialogJob?.company}</Dialog.Description></div>
-                <Dialog.Close className={styles.closeButton} aria-label={t("close")}><X size={20} aria-hidden="true" /></Dialog.Close>
+                <div><p className={styles.eyebrow}>{t("sample")}</p><Dialog.Title ref={dialogTitleRef} tabIndex={-1}>{dialogMode === "description" ? <FileText size={20} aria-hidden="true" /> : <Sparkles size={20} aria-hidden="true" />}{t(dialogMode === "description" ? "jobDescription" : "dialogTitle")}</Dialog.Title><Dialog.Description>{dialogJob?.title}<span aria-hidden="true"> · </span>{dialogJob?.company}</Dialog.Description></div>
+                <Dialog.Close className={styles.closeButton} aria-label={t(dialogMode === "description" ? "closeJobDescription" : "close")}><X size={20} aria-hidden="true" /></Dialog.Close>
               </header>
-              <div className={styles.dialogBody}>
+              <div className={styles.dialogBody} tabIndex={dialogMode === "description" ? 0 : undefined} role={dialogMode === "description" ? "region" : undefined} aria-label={dialogMode === "description" ? t("jobDescription") : undefined}>
+                {dialogMode === "description" && dialogJob ? <div className={`${styles.jobDescription} ${styles.fullDescription}`}>
+                  <p>{dialogJob.intro}</p><ul>{dialogJob.responsibilities.map((item) => <li key={item}>{item}</li>)}</ul>
+                  <h3>{t("aboutYou")}</h3>
+                  <p id={`${id}-source`} ref={sourceRef} tabIndex={-1} className={styles.sourceQuote} data-highlighted={highlightedId === dialogJob.id}>{highlightedId === dialogJob.id ? <mark>{dialogJob.source}</mark> : dialogJob.source}</p>
+                  <p>{dialogJob.closing}</p>
+                </div> :
                 <DocumentTargetTabs target={target} onSelect={(nextTarget) => { setTarget(nextTarget); setPhase("none"); }} label={t("documentTargets")} labels={{ resume: t("resume"), cover: t("cover") }} indicators={{ resume: dialogJob && prepared[dialogJob.id]?.resume ? { kind: "published", label: t("publishedSample") } : null, cover: dialogJob && prepared[dialogJob.id]?.cover ? { kind: "published", label: t("publishedSample") } : null }}>
                   <section className={styles.generatePanel} aria-label={t("generateExample")}>
                     {hasDocument ? <details className={styles.regenerate}><summary>{t("showAgain")}</summary><p>{t("preparedNote")}</p></details> : <div className={styles.generateContent}>
@@ -284,9 +291,9 @@ export function ApplicationDemo() {
                       </TailorStep>
                     </div>
                   </>}
-                </DocumentTargetTabs>
+                </DocumentTargetTabs>}
               </div>
-              <footer className={styles.dialogFooter}><p>{t("dialogFooter")}</p><Dialog.Close className={styles.secondaryButton}>{t("backToJobs")}<ArrowRight size={15} aria-hidden="true" /></Dialog.Close></footer>
+              <footer className={styles.dialogFooter}><p>{t(dialogMode === "description" ? "sampleNote" : "dialogFooter")}</p><Dialog.Close className={styles.secondaryButton}>{t("backToJobs")}<ArrowRight size={15} aria-hidden="true" /></Dialog.Close></footer>
             </Dialog.Content>
           </Dialog.Portal>}
         </Dialog.Root>
