@@ -1,97 +1,36 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen, cleanup } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
-import MarketingPage from "./page";
+import MarketingPage, { generateMetadata } from "./page";
 import messages from "../../messages/en.json";
 
-// Mocks —
-//   next-auth: SessionProvider is injected by a production layout, not by
-//     the test; useSession() would throw otherwise.
-//   next-themes: ThemeToggle renders a placeholder until mounted, so we
-//     only need a stub that yields `resolvedTheme === "light"`.
-//   framer-motion: spreads through data-testid passthrough, safe to leave.
-
-vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: null, status: "unauthenticated" }),
-}));
-
-// LocaleSwitcher calls useRouter() which requires an App-Router context;
-// mock it here so the Nav can render in isolation.
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
-  usePathname: () => "/",
-}));
-
-vi.mock("next-themes", async () => {
-  const actual = await vi.importActual<typeof import("next-themes")>(
-    "next-themes",
-  );
-  return {
-    ...actual,
-    useTheme: () => ({ theme: "light", resolvedTheme: "light", setTheme: vi.fn() }),
-    ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
-  };
-});
+const { locale } = vi.hoisted(() => ({ locale: { value: "en" } }));
+vi.mock("next-intl/server", () => ({ getLocale: async () => locale.value }));
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: null, status: "unauthenticated" }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }), usePathname: () => "/" }));
+// The decorative WebGL module is isolated from the server-rendered content contract.
+vi.mock("next/dynamic", () => ({ default: () => () => null }));
+afterEach(() => { cleanup(); locale.value = "en"; });
 
 describe("MarketingPage", () => {
-  it("renders the six-movement landing without the retired sections", () => {
-    render(
-      <NextIntlClientProvider locale="en" messages={messages}>
-        <MarketingPage />
-      </NextIntlClientProvider>,
-    );
-
-    // Six movements by design: hero + capability facts + the four-stage
-    // flow + the paste-loop architecture + the AI bento + the
-    // three-question close. The generic intro sections (how-it-works,
-    // feature grid) stay retired.
-    const required = [
-      "landing-nav",
-      "landing-hero",
-      "landing-logobar",
-      "landing-flow",
-      "landing-architecture",
-      "landing-bento",
-      "landing-faq",
-      "landing-cta",
-      "landing-footer",
-    ];
-
-    for (const testid of required) {
-      expect(
-        screen.getByTestId(testid),
-        `missing section: ${testid}`,
-      ).toBeInTheDocument();
+  it("keeps product content, working anchors and CTAs available without WebGL", async () => {
+    render(<NextIntlClientProvider locale="en" messages={messages}>{await MarketingPage()}</NextIntlClientProvider>);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Your next chapter.");
+    expect(document.getElementById("main-content")).toHaveAttribute("tabindex", "-1");
+    for (const anchor of document.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) {
+      expect(document.getElementById(anchor.hash.slice(1)), `Missing target ${anchor.hash}`).not.toBeNull();
     }
+    const workspace = screen.getAllByRole("link", { name: /open workspace/i });
+    expect(workspace.length).toBeGreaterThan(0);
+    for (const link of workspace) expect(link).toHaveAttribute("href", "/login?callbackUrl=/jobs");
+    expect(screen.getByRole("group", { name: /interactive product demo/i })).toBeInTheDocument();
+    expect(document.querySelector('script[type="application/ld+json"]')).not.toHaveTextContent('"price"');
+  });
 
-    expect(screen.queryByTestId("landing-access")).not.toBeInTheDocument();
-
-    // Every nav anchor must land on a real section id, or the smooth-scroll
-    // handler silently degrades into a no-op.
-    for (const anchor of ["flow", "architecture", "faq"]) {
-      expect(
-        document.getElementById(anchor),
-        `missing nav anchor target: #${anchor}`,
-      ).toBeInTheDocument();
-    }
-
-    expect(screen.getByTestId("hero-demo-row-0")).toHaveAttribute(
-      "data-active",
-      "true",
-    );
-
-    const nav = screen.getByTestId("landing-nav");
-    const skipTarget = document.getElementById("main-content");
-    expect(skipTarget).toHaveAttribute("tabindex", "-1");
-    expect(nav.compareDocumentPosition(skipTarget as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    const githubLink = screen.getByRole("link", {
-      name: /star joblit on github/i,
-    });
-    expect(githubLink).toHaveAttribute(
-      "href",
-      "https://github.com/ShousenZHANG/joblit",
-    );
-    expect(githubLink).toHaveAttribute("target", "_blank");
+  it("localizes search metadata for Chinese visitors", async () => {
+    locale.value = "zh";
+    const metadata = await generateMetadata();
+    expect(metadata.title).toBe("下一份理想工作，从这里开始");
+    expect(metadata.description).toContain("澳洲");
   });
 });

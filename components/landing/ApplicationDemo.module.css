@@ -1,0 +1,324 @@
+.section {
+  --demo-bg: var(--experience-bg, #f5f8fa);
+  --demo-panel: var(--experience-surface, #fff);
+  --demo-raised: var(--experience-raised, #edf3f5);
+  --demo-border: var(--experience-line, #e1e7ea);
+  --demo-text: var(--experience-text, #080b10);
+  --demo-muted: var(--experience-muted, #5b6570);
+  --demo-accent: var(--experience-green, #007f64);
+  --demo-accent-wash: var(--experience-accent-wash, #e9faf3);
+  --demo-tailor: #00865e;
+  --demo-blue: #1265c4;
+  --demo-blue-wash: #f0f6fd;
+  --demo-blue-border: #d6e6fa;
+  width: min(1280px, calc(100% - 76px));
+  margin-inline: auto;
+  padding-block: 104px;
+  color: var(--demo-text);
+  scroll-margin-top: 108px;
+}
+:global(.dark) .section { --demo-tailor: #047f5e; --demo-blue: #83baff; --demo-blue-wash: #101f34; --demo-blue-border: #233d60; }
+.section *, .section *::before, .section *::after { box-sizing: border-box; }
+.section :is(button, a, summary, label) { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.section button, .section summary { cursor: pointer; }
+.section :is(button, select, input) { font-family: inherit; }
+.section :is(button, a, summary, select, input, [tabindex]):focus-visible { outline: 2px solid var(--demo-accent); outline-offset: 4px; }
+.section svg { flex-shrink: 0; }
+.sectionHeading { max-width: 680px; margin-bottom: 36px; }
+.eyebrow { color: var(--demo-accent); font-size: 11px; font-weight: 650; letter-spacing: .12em; line-height: 1.6; }
+.sectionHeading h2 { margin: 14px 0 18px; font-size: clamp(32px, 4.3vw, 54px); font-weight: 700; line-height: 1.12; letter-spacing: -.045em; text-wrap: balance; }
+.description { color: var(--demo-muted); max-width: 570px; font-size: 17px; line-height: 1.75; }
+
+/* The real search and Tailor primitives inherit the same palette as the demo. */
+.workspace, .portalRoot {
+  --background: var(--demo-panel);
+  --foreground: var(--demo-text);
+  --card: var(--demo-panel);
+  --card-foreground: var(--demo-text);
+  --popover: var(--demo-panel);
+  --popover-foreground: var(--demo-text);
+  --muted: var(--demo-raised);
+  --muted-foreground: var(--demo-muted);
+  --border: var(--demo-border);
+  --input: var(--demo-border);
+  --ring: var(--demo-accent);
+  --accent: var(--demo-raised);
+  --accent-foreground: var(--demo-text);
+  --primary: var(--demo-tailor);
+  --primary-foreground: #fff;
+  --brand-emerald-50: var(--demo-accent-wash);
+  --brand-emerald-200: color-mix(in srgb, var(--demo-accent) 30%, var(--demo-border));
+  --brand-emerald-text: var(--demo-accent);
+}
+.workspace { overflow: hidden; border: 1px solid var(--demo-border); border-radius: 24px; background: var(--demo-panel); box-shadow: 0 20px 60px -42px #07162938; }
+.toolbar { display: flex; align-items: center; gap: 20px; min-height: 72px; padding: 12px 20px; border-bottom: 1px solid var(--demo-border); }
+.brand { display: flex; align-items: center; gap: 9px; flex-shrink: 0; font-size: 17px; font-weight: 650; letter-spacing: -.025em; }
+.brandMark { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid color-mix(in srgb, var(--demo-accent) 22%, var(--demo-panel)); border-radius: 11px; background: var(--demo-accent-wash); color: var(--demo-accent); font-size: 21px; }
+.tabs { display: flex; min-width: 0; gap: 3px; }
+.tabs button { min-height: 44px; padding: 9px 16px; border: 0; border-radius: 999px; background: transparent; color: var(--demo-muted); font-size: 14px; font-weight: 550; transition: background-color .15s, color .15s; }
+.tabs button:hover { background: var(--demo-raised); color: var(--demo-text); }
+.tabs button[aria-selected="true"] { background: var(--demo-tailor); color: #fff; }
+.sampleBadge { display: inline-flex; align-items: center; width: fit-content; padding: 4px 9px; border: 1px solid var(--demo-border); border-radius: 999px; color: var(--demo-muted); font-size: 11px; line-height: 1.5; white-space: nowrap; }
+.toolbar > .sampleBadge { margin-left: auto; }
+.reset { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 44px; min-height: 44px; padding: 9px 8px; border: 0; border-radius: 10px; background: transparent; color: var(--demo-muted); font-size: 12px; }
+.reset:hover { color: var(--demo-text); background: var(--demo-raised); }
+.jobsPanel { display: grid; grid-template-columns: minmax(265px, .32fr) minmax(0, .68fr); height: 730px; min-height: 0; }
+.jobsPanel[hidden], .fetchPanel[hidden], .resumePanel[hidden] { display: none; }
+.sidebar { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--demo-border); }
+.search { padding: 16px; border-bottom: 1px solid var(--demo-border); }
+.search input { width: 100%; min-width: 0; height: 44px; background: var(--demo-panel); font-size: 13px; }
+.search input::placeholder { color: var(--demo-muted); }
+.filterBar { display: flex; flex-wrap: wrap; gap: 3px; padding: 10px 16px; border-bottom: 1px solid var(--demo-border); }
+.filterBar button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--demo-muted); font-size: 12px; font-weight: 600; }
+.filterBar button:hover { background: var(--demo-raised); }
+.filterBar button[aria-pressed="true"] { background: var(--demo-tailor); color: #fff; }
+.filterBar button > span { display: inline-grid; min-width: 19px; height: 19px; place-items: center; padding-inline: 4px; border-radius: 999px; background: #ffffff30; font-size: 11px; }
+.jobList { display: grid; align-content: start; gap: 10px; min-height: 0; margin: 0; padding: 14px; overflow-y: auto; scrollbar-width: thin; list-style: none; }
+.jobList > li { min-width: 0; }
+.jobCard { display: flex; flex-direction: column; width: 100%; padding: 16px; border: 1px solid color-mix(in srgb, var(--demo-border) 70%, var(--demo-panel)); border-left: 3px solid transparent; border-radius: 16px; background: var(--demo-panel); color: var(--demo-text); text-align: left; transition: background-color .15s, border-color .15s; }
+.jobCard:hover { background: var(--demo-raised); }
+.jobCard[aria-pressed="true"] { border-color: color-mix(in srgb, var(--demo-accent) 28%, var(--demo-panel)); border-left-color: var(--demo-accent); background: color-mix(in srgb, var(--demo-accent-wash) 72%, var(--demo-panel)); }
+.jobCardTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 11px; color: var(--demo-muted); font-size: 11px; line-height: 1.5; }
+.statusBadge { padding: 2px 8px; border: 1px solid color-mix(in srgb, var(--demo-accent) 30%, var(--demo-panel)); border-radius: 999px; background: var(--demo-accent-wash); color: var(--demo-accent); font-size: 11px; font-weight: 550; }
+.statusBadge[data-status="APPLIED"] { border-color: var(--demo-blue-border); background: var(--demo-blue-wash); color: var(--demo-blue); }
+.statusBadge[data-status="REJECTED"] { border-color: var(--demo-border); background: var(--demo-raised); color: var(--demo-muted); }
+.jobCard > strong { font-size: 14px; font-weight: 650; line-height: 1.45; overflow-wrap: anywhere; }
+.qualifier { margin-top: 4px; color: var(--demo-muted); font-size: 12px; line-height: 1.6; }
+.company { margin-top: 10px; font-size: 12px; line-height: 1.6; }
+.location { display: flex; align-items: flex-start; gap: 5px; margin-top: 5px; color: var(--demo-muted); font-size: 11px; line-height: 1.6; }
+.location svg { margin-top: 2px; }
+.listMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 11px; color: var(--demo-muted); font-size: 11px; line-height: 1.5; }
+.sourceBadge { padding: 2px 6px; border: 1px solid var(--demo-border); border-radius: 999px; font-size: 10px; }
+.listFooter { margin: auto 0 0; padding: 12px 17px; border-top: 1px solid var(--demo-border); color: var(--demo-muted); font-size: 11px; line-height: 1.6; }
+.listEmpty, .detailEmpty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 48px 22px; color: var(--demo-muted); text-align: center; }
+.listEmpty > p, .detailEmpty h3 { color: var(--demo-text); font-size: 16px; font-weight: 600; }
+.listEmpty > span, .detailEmpty > p { max-width: 330px; font-size: 13px; line-height: 1.7; }
+.detailEmpty { min-height: 560px; }
+.detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.detailHeader { flex-shrink: 0; padding: 25px 28px 17px; border-bottom: 1px solid var(--demo-border); }
+.mobileBack { display: none; }
+.titleRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.titleRow > div { min-width: 0; }
+.titleRow h3 { margin: 0; font-size: clamp(22px, 2.2vw, 29px); font-weight: 680; line-height: 1.25; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.detailQualifier { margin-top: 6px; color: var(--demo-muted); font-size: 14px; line-height: 1.6; }
+.statusSelect { display: flex; align-items: center; gap: 7px; flex-shrink: 0; min-width: 99px; min-height: 36px; padding: 0 10px; border: 1px solid var(--demo-border); border-radius: 999px; background: var(--demo-panel); }
+.statusSelect:focus-within { outline: 2px solid var(--demo-accent); outline-offset: 3px; }
+.statusSelect select { min-width: 0; width: 100%; height: 34px; appearance: none; border: 0; outline: 0; background: transparent; color: var(--demo-text); font-size: 12px; cursor: pointer; }
+.statusSelect select:focus-visible { outline: none; }
+.statusSelect option { background: var(--demo-panel); color: var(--demo-text); }
+.statusDot { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--demo-accent); }
+.statusDot[data-status="APPLIED"] { background: var(--demo-blue); }
+.statusDot[data-status="REJECTED"] { background: var(--demo-muted); }
+.jobMeta { display: flex; flex-wrap: wrap; gap: 5px 11px; margin: 14px 0 0; color: var(--demo-muted); font-size: 12px; line-height: 1.6; }
+.jobMeta > span + span::before { content: "·"; margin-right: 11px; opacity: .6; }
+.companyLabel { color: var(--demo-accent); font-weight: 550; }
+.actionRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 17px; padding-top: 14px; border-top: 1px solid var(--demo-border); }
+.tailorButton, .secondaryButton, .openJob, .textButton, .pdfLink, .sourceButton { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 7px 13px; border: 1px solid transparent; border-radius: 10px; font-size: 13px; font-weight: 550; line-height: 20px; text-decoration: none; transition: background-color .15s, border-color .15s, color .15s; }
+.tailorButton { background: var(--demo-tailor); color: #fff; }
+.tailorButton:hover { background: color-mix(in srgb, var(--demo-tailor) 86%, #001e14); }
+.secondaryButton { border-color: var(--demo-border); background: var(--demo-panel); color: var(--demo-text); }
+.secondaryButton:hover { background: var(--demo-raised); }
+.openJob, .pdfLink { border-color: var(--demo-blue-border); background: var(--demo-blue-wash); color: var(--demo-blue); }
+.openJob:hover, .pdfLink:hover { background: color-mix(in srgb, var(--demo-blue-wash) 86%, var(--demo-blue)); }
+.textButton { padding-inline: 0; background: transparent; color: var(--demo-accent); }
+.textButton:hover { text-decoration: underline; text-underline-offset: 4px; }
+.deleteButton { display: inline-grid; width: 36px; height: 36px; place-items: center; flex-shrink: 0; margin-left: auto; border: 1px solid var(--demo-border); border-radius: 10px; background: var(--demo-panel); color: var(--demo-muted); }
+.deleteButton:hover { background: color-mix(in srgb, #c84545 8%, var(--demo-panel)); color: #c84545; }
+.detailBody { min-height: 0; padding: 23px 28px 34px; overflow-y: auto; scrollbar-width: thin; }
+.requirements { padding-bottom: 23px; border-bottom: 1px solid var(--demo-border); }
+.requirements h4, .jobDescription h4 { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; font-size: 14px; font-weight: 650; line-height: 1.5; }
+.requirements h4 svg { color: var(--demo-muted); }
+.requirementGrid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 12px; }
+.experienceCard, .technologyCard { min-width: 0; padding: 14px 15px; border: 1px solid var(--demo-border); border-radius: 12px; background: var(--demo-raised); }
+.experienceCard { border-color: var(--demo-blue-border); background: var(--demo-blue-wash); }
+.experienceCard > p, .technologyCard > p { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; color: var(--demo-muted); font-size: 12px; font-weight: 550; line-height: 1.5; }
+.experienceCard > p svg { color: var(--demo-blue); }
+.experienceCard > div { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.experienceCard strong { font-size: 21px; font-weight: 650; line-height: 1.3; letter-spacing: -.025em; }
+.sourceButton { min-height: 32px; padding: 4px 7px; border-color: var(--demo-border); border-radius: 8px; background: var(--demo-panel); color: var(--demo-muted); font-size: 11px; }
+.sourceButton svg { color: var(--demo-blue); }
+.sourceButton:hover { color: var(--demo-blue); border-color: var(--demo-blue-border); }
+.technologyCard ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.technologyCard li { padding: 4px 9px; border: 1px solid color-mix(in srgb, var(--demo-accent) 25%, var(--demo-panel)); border-radius: 999px; background: var(--demo-accent-wash); color: var(--demo-accent); font-size: 11px; line-height: 1.5; }
+.jobDescription { margin-top: 23px; }
+.jobDescription p, .jobDescription li { color: var(--demo-muted); font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.jobDescription p { margin-bottom: 16px; }
+.jobDescription ul { display: grid; gap: 8px; margin: 15px 0 22px; padding-left: 19px; }
+.jobDescription h5 { margin: 22px 0 12px; font-size: 14px; font-weight: 650; line-height: 1.5; }
+.sourceQuote { margin-left: -12px; padding: 10px 12px; border: 1px solid transparent; border-radius: 9px; scroll-margin-top: 120px; }
+.sourceQuote[data-highlighted="true"] { border-color: var(--demo-blue-border); background: var(--demo-blue-wash); }
+.sourceQuote mark { background: transparent; color: var(--demo-text); }
+.fetchPanel, .resumePanel { display: grid; grid-template-columns: .9fr 1.1fr; align-items: start; gap: 48px; min-height: 650px; padding: 48px; background: var(--demo-raised); }
+.previewHeading h3 { margin: 20px 0 14px; font-size: 28px; font-weight: 650; line-height: 1.25; letter-spacing: -.035em; }
+.previewHeading > p { color: var(--demo-muted); font-size: 15px; line-height: 1.8; }
+.previewHeading > .textButton { margin-top: 14px; }
+.fetchCard, .profileCard { padding: 28px; border: 1px solid var(--demo-border); border-radius: 17px; background: var(--demo-panel); box-shadow: 0 8px 24px -20px #07162930; }
+.fetchCard dl { display: grid; gap: 22px; }
+.fetchCard dt { color: var(--demo-muted); font-size: 12px; line-height: 1.5; }
+.fetchCard dd { margin: 7px 0 0; font-size: 16px; line-height: 1.7; }
+.fetchCard > p { margin: 25px 0 18px; padding-top: 19px; border-top: 1px solid var(--demo-border); color: var(--demo-muted); font-size: 13px; line-height: 1.7; }
+.profileCard > header { padding-bottom: 19px; border-bottom: 1px solid var(--demo-border); }
+.profileCard h4 { font-size: 27px; font-weight: 650; line-height: 1.3; letter-spacing: -.035em; }
+.profileCard > header p { margin-top: 6px; }
+.profileCard > section { margin-top: 23px; }
+.profileCard h5, .reviewContent h4 { margin-bottom: 9px; font-size: 12px; font-weight: 650; line-height: 1.6; }
+.profileCard p { color: var(--demo-muted); font-size: 13px; line-height: 1.8; }
+.skills { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.skills li { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid var(--demo-border); border-radius: 7px; background: var(--demo-raised); font-size: 12px; line-height: 1.6; }
+.experience { display: grid; gap: 10px; margin: 0; padding-left: 18px; color: var(--demo-muted); font-size: 13px; line-height: 1.8; }
+.demoDisclaimer { display: flex; align-items: flex-start; gap: 8px; padding: 15px 21px; border-top: 1px solid var(--demo-border); color: var(--demo-muted); font-size: 11px; line-height: 1.7; }
+.demoDisclaimer svg { margin-top: 2px; color: var(--demo-accent); }
+.setupNote { margin-top: 18px; color: var(--demo-muted); text-align: center; font-size: 12px; line-height: 1.8; }
+.srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+.portalRoot { color: var(--demo-text); }
+.dialogOverlay { position: fixed; inset: 0; z-index: 1000; background: #02091685; backdrop-filter: blur(5px); animation: overlay-enter .16s ease-out; }
+.dialog { position: fixed; z-index: 1001; top: 50%; left: 50%; display: flex; flex-direction: column; width: min(880px, calc(100vw - 40px)); max-height: 92vh; max-height: 92dvh; overflow: hidden; transform: translate(-50%, -50%); border: 1px solid var(--demo-border); border-radius: 22px; background: var(--demo-panel); color: var(--demo-text); box-shadow: 0 32px 100px #02091655; animation: dialog-enter .18s ease-out; }
+.dialogHeader { display: flex; flex-shrink: 0; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px 26px 21px; border-bottom: 1px solid var(--demo-border); }
+.dialogHeader > div { min-width: 0; }
+.dialogHeader .eyebrow { margin-bottom: 9px; font-size: 10px; }
+.dialogHeader h2 { display: flex; align-items: center; gap: 10px; width: fit-content; border-radius: 4px; font-size: 22px; font-weight: 650; line-height: 1.3; letter-spacing: -.025em; }
+.dialogHeader h2 svg { color: var(--demo-accent); }
+.dialogHeader > div > p:last-child { margin-top: 9px; color: var(--demo-muted); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.closeButton { display: inline-grid; width: 44px; height: 44px; place-items: center; flex-shrink: 0; margin: -4px -6px 0 0; border: 0; border-radius: 50%; background: transparent; color: var(--demo-muted); }
+.closeButton:hover { background: var(--demo-raised); color: var(--demo-text); }
+.dialogBody { min-height: 0; padding: 22px 26px 26px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.dialogBody > [role="tablist"] { margin-bottom: 18px; }
+.dialogBody > [role="tabpanel"] { gap: 14px; border-radius: 10px; }
+.generatePanel { border: 1px solid color-mix(in srgb, var(--demo-accent) 26%, var(--demo-panel)); border-radius: 15px; background: color-mix(in srgb, var(--demo-accent-wash) 48%, var(--demo-panel)); }
+.generateContent { padding: 23px; }
+.generateHeading { display: flex; align-items: flex-start; gap: 14px; }
+.generateHeading > span { display: grid; width: 48px; height: 52px; place-items: center; flex-shrink: 0; border: 1px solid color-mix(in srgb, var(--demo-accent) 22%, var(--demo-panel)); border-radius: 12px; background: var(--demo-panel); color: var(--demo-accent); }
+.generateHeading h3 { margin-bottom: 6px; font-size: 18px; font-weight: 650; line-height: 1.4; letter-spacing: -.02em; }
+.generateHeading p { color: var(--demo-muted); font-size: 13px; line-height: 1.7; }
+.generateAction { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 21px; }
+.generateAction > span { display: inline-flex; align-items: center; gap: 6px; color: var(--demo-muted); font-size: 11px; line-height: 1.6; }
+.dialog .tailorButton, .dialog .secondaryButton, .dialog .pdfLink { min-height: 44px; }
+.generationExplanation { margin-top: 13px; color: var(--demo-muted); font-size: 12px; line-height: 1.7; }
+.regenerate { padding: 4px 18px 15px; }
+.regenerate:not([open]) { padding-bottom: 4px; }
+.regenerate summary { min-height: 44px; padding-block: 13px; font-size: 13px; font-weight: 550; line-height: 1.5; }
+.regenerate p { color: var(--demo-muted); font-size: 12px; line-height: 1.7; }
+.lockedSteps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.lockedSteps > section { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-content: start; gap: 7px 9px; padding: 16px; border: 1px solid var(--demo-border); border-radius: 12px; background: color-mix(in srgb, var(--demo-raised) 45%, var(--demo-panel)); color: var(--demo-muted); }
+.lockedSteps svg { margin-top: 2px; }
+.lockedSteps h3 { color: var(--demo-text); font-size: 13px; font-weight: 550; line-height: 1.6; }
+.lockedSteps p { grid-column: 2; font-size: 12px; line-height: 1.7; }
+.preparedSuccess { display: flex; align-items: flex-start; gap: 8px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--demo-accent) 26%, var(--demo-panel)); border-radius: 10px; background: var(--demo-accent-wash); color: var(--demo-accent); font-size: 13px; line-height: 1.6; }
+.preparedSuccess svg { margin-top: 2px; }
+.steps { display: grid; gap: 11px; }
+.reviewContent { display: grid; gap: 20px; }
+.reviewText { color: var(--demo-muted); font-size: 14px; line-height: 1.8; overflow-wrap: anywhere; }
+.originalSummary summary { min-height: 44px; padding-block: 12px; color: var(--demo-accent); font-size: 12px; line-height: 1.7; }
+.originalSummary p { padding: 13px 15px; border: 1px solid var(--demo-border); border-radius: 9px; background: var(--demo-raised); color: var(--demo-muted); font-size: 13px; line-height: 1.8; }
+.reviewContent .skills li { border-color: color-mix(in srgb, var(--demo-accent) 25%, var(--demo-panel)); background: var(--demo-accent-wash); color: var(--demo-accent); }
+.reviewHint { margin: 9px 0 12px; color: var(--demo-muted); font-size: 12px; line-height: 1.7; }
+.preserved { display: flex; align-items: flex-start; gap: 7px; padding-top: 15px; border-top: 1px solid var(--demo-border); color: var(--demo-accent); font-size: 12px; line-height: 1.7; }
+.preserved svg { margin-top: 2px; }
+.reviewFooter { display: flex; justify-content: flex-end; margin-top: 19px; padding-top: 16px; border-top: 1px solid var(--demo-border); }
+.dialogFooter { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 26px; border-top: 1px solid var(--demo-border); background: var(--demo-panel); }
+.dialogFooter > p { max-width: 500px; color: var(--demo-muted); font-size: 11px; line-height: 1.7; }
+.dialogFooter > button { flex-shrink: 0; }
+@keyframes overlay-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dialog-enter { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
+
+@media (max-width: 1050px) {
+  .section { width: calc(100% - 48px); }
+  .jobsPanel { grid-template-columns: minmax(245px, .34fr) minmax(0, .66fr); }
+  .toolbar { gap: 12px; }
+  .toolbar > .sampleBadge { display: none; }
+  .reset { margin-left: auto; }
+  .detailHeader { padding: 22px 22px 16px; }
+  .detailBody { padding-inline: 22px; }
+  .titleRow { gap: 12px; }
+  .titleRow h3 { font-size: 23px; }
+  .statusSelect { min-width: 88px; }
+  .jobList { padding: 10px; }
+  .jobCard { padding: 13px; }
+  .requirementGrid { gap: 9px; }
+  .experienceCard, .technologyCard { padding: 12px; }
+  .experienceCard strong { font-size: 19px; }
+  .fetchPanel, .resumePanel { gap: 30px; padding: 34px; }
+}
+@media (max-width: 700px) {
+  .section { width: calc(100% - 32px); padding-block: 72px; }
+  .sectionHeading { margin-bottom: 28px; }
+  .description { font-size: 16px; }
+  .workspace { border-radius: 18px; }
+  .toolbar { gap: 10px; min-height: 66px; padding: 10px 13px; }
+  .brand > span:last-child { display: none; }
+  .tabs { gap: 1px; }
+  .tabs button { padding-inline: 12px; font-size: 13px; }
+  .reset > span { display: none; }
+  .jobsPanel { display: block; height: auto; min-height: 0; }
+  .jobsPanel[data-mobile-pane="list"] .detail, .jobsPanel[data-mobile-pane="detail"] .sidebar { display: none; }
+  .sidebar { min-height: 550px; border-right: 0; }
+  .search { padding: 14px; }
+  .search input { font-size: 16px; }
+  .filterBar { padding: 8px 14px; }
+  .filterBar button { min-height: 44px; }
+  .jobList { gap: 9px; padding: 12px; overflow: visible; }
+  .jobCard { padding: 15px; scroll-margin-top: 100px; }
+  .jobCard > strong { font-size: 15px; }
+  .location, .listMeta { font-size: 12px; }
+  .detailHeader { padding: 13px 20px 17px; scroll-margin-top: 100px; }
+  .mobileBack { display: inline-flex; align-items: center; gap: 7px; min-height: 44px; margin: 0 0 10px -5px; padding: 7px 5px; border: 0; background: transparent; color: var(--demo-accent); font-size: 13px; }
+  .titleRow { flex-wrap: wrap; gap: 13px; }
+  .titleRow h3 { font-size: 25px; }
+  .statusSelect { min-height: 44px; }
+  .statusSelect select { height: 42px; font-size: 14px; }
+  .actionRow { gap: 8px; margin-top: 15px; padding-top: 13px; }
+  .actionRow > .secondaryButton { order: 1; }
+  .tailorButton, .secondaryButton, .openJob, .textButton, .pdfLink, .sourceButton { min-height: 44px; }
+  .deleteButton { width: 44px; height: 44px; }
+  .detailBody { padding: 22px 20px 28px; overflow: visible; }
+  .requirementGrid { grid-template-columns: 1fr; gap: 10px; }
+  .experienceCard, .technologyCard { padding: 15px; }
+  .experienceCard > p, .technologyCard > p { font-size: 13px; }
+  .experienceCard strong { font-size: 23px; }
+  .technologyCard li { font-size: 12px; }
+  .jobDescription p, .jobDescription li, .jobDescription h4, .jobDescription h5 { font-size: 15px; }
+  .sourceQuote { scroll-margin-top: 105px; }
+  .fetchPanel, .resumePanel { grid-template-columns: 1fr; gap: 25px; min-height: 0; padding: 25px 20px; }
+  .previewHeading h3 { font-size: 26px; }
+  .fetchCard, .profileCard { padding: 23px; }
+  .profileCard p, .experience { font-size: 14px; }
+  .demoDisclaimer { padding: 14px 17px; }
+  .dialog { width: calc(100vw - 24px); border-radius: 18px; }
+  .dialogHeader { gap: 12px; padding: 20px 19px 17px; }
+  .dialogHeader h2 { font-size: 20px; }
+  .dialogHeader > div > p:last-child { font-size: 12px; }
+  .dialogBody { padding: 18px 16px 22px; }
+  .generateContent { padding: 18px; }
+  .generateHeading { gap: 11px; }
+  .generateHeading > span { width: 39px; height: 44px; }
+  .generateHeading h3 { font-size: 17px; }
+  .generateAction { flex-direction: column; align-items: stretch; }
+  .generateAction > .tailorButton { width: 100%; }
+  .lockedSteps { grid-template-columns: 1fr; }
+  .dialogFooter { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 19px; }
+  .dialogFooter > button { align-self: flex-end; }
+  .reviewFooter > button { width: 100%; }
+}
+@media (max-width: 390px) {
+  .toolbar { gap: 6px; padding-inline: 10px; }
+  .brandMark { width: 30px; height: 32px; }
+  .tabs button { padding-inline: 9px; font-size: 12px; }
+  .reset { padding-inline: 5px; }
+  .detailHeader, .detailBody { padding-inline: 16px; }
+  .actionRow { gap: 6px; }
+  .actionRow > :is(.tailorButton, .openJob, .secondaryButton) { padding-inline: 10px; gap: 5px; }
+  .dialogHeader { padding-inline: 16px; }
+  .dialogBody { padding-inline: 12px; }
+  .generateHeading > span { display: none; }
+  .pdfLink { padding-inline: 9px; font-size: 12px; }
+}
+@media (pointer: coarse) {
+  .filterBar button, .actionRow > :is(button, a), .sourceButton { min-height: 44px; }
+  .deleteButton { width: 44px; height: 44px; }
+  .statusSelect { min-height: 44px; }
+  .statusSelect select { height: 42px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .section *, .section *::before, .section *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

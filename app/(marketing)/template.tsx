@@ -1,8 +1,4 @@
-"use client";
-
-import { RouteTransition } from "../RouteTransition";
-
+/** Individual landing sections own their motion; keep the page shell stable. */
 export default function MarketingTemplate({ children }: { children: React.ReactNode }) {
-  return <RouteTransition>{children}</RouteTransition>;
+  return children;
 }
-

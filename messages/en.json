@@ -560,143 +560,7 @@
   "landing": {
     "nav": {
       "startFree": "Start free",
-      "openApp": "Open app",
-      "logIn": "Log in",
-      "primary": "Primary navigation",
-      "home": "Joblit home",
-      "github": "Star Joblit on GitHub",
-      "openMenu": "Open menu",
-      "closeMenu": "Close menu",
-      "howItWorks": "How it works",
-      "architecture": "Architecture",
-      "faq": "FAQ"
-    },
-    "hero": {
-      "eyebrowNew": "New",
-      "eyebrowTagline": "Local-first · Open source · Built for AU job hunts",
-      "titleLine1": "The job search,",
-      "titleItalic": "re-engineered.",
-      "subtitle": "Joblit pulls Australian roles into one workspace and builds the exact tailoring prompt for each JD. Paste it into the chatbot you already use, paste the result back, export clean LaTeX PDFs — Joblit's servers hold no model keys.",
-      "startFree": "Start free",
-      "viewSource": "View source",
-      "metaFree": "Free for everyone · No credit card · Google or GitHub sign-in"
-    },
-    "logoBar": {
-      "heading": "What's under the hood",
-      "items": {
-        "intake": {
-          "value": "LinkedIn role discovery",
-          "label": "Australian job intake"
-        },
-        "screening": {
-          "value": "Australian recall-safe screening",
-          "label": "eligibility and seniority policy"
-        },
-        "byom": {
-          "value": "Your own chatbot — Joblit holds no model keys",
-          "label": "generation, local-first"
-        }
-      }
-    },
-    "flow": {
-      "kicker": "The workflow",
-      "titlePrefix": "From listing to",
-      "titleItalic": "signed-off PDF.",
-      "steps": {
-        "fetch": {
-          "title": "Fetch",
-          "body": "Pull fresh roles into one list with a single run. Duplicates and dead links are filtered before you ever see them."
-        },
-        "triage": {
-          "title": "Triage",
-          "body": "Scan each ad with the fine print already pulled out, and keep only the roles worth your time."
-        },
-        "generate": {
-          "title": "Tailor",
-          "body": "Copy the prepared prompt into any chatbot, paste the JSON back, review, publish. Only the summary and the skills order change — never your bullets."
-        },
-        "export": {
-          "title": "Export",
-          "body": "Every draft comes back for review, then compiles to a clean LaTeX PDF — named, filed, ready to send."
-        }
-      }
-    },
-    "architecture": {
-      "kicker": "Architecture",
-      "titlePrefix": "Bring your own",
-      "titleItalic": "chatbot.",
-      "lede": "Joblit builds the exact prompt and checks what comes back — the writing happens in whatever chatbot you already pay for. The servers hold no model key and cannot call a model. That is enforced by the architecture, not promised by a policy.",
-      "workspaceTitle": "Joblit workspace",
-      "workspaceDesc": "Builds the exact prompt from your resume profile and rules — and holds no model keys.",
-      "chatbotTitle": "Your chatbot",
-      "chatbotDesc": "Any assistant you already pay for — Claude, ChatGPT, Gemini.",
-      "boundaryLabel": "Your account",
-      "boundaryCaption": "Joblit never sees your model account.",
-      "gatesTitle": "Deterministic gates",
-      "gatesDesc": "Summary lint and index resolution — fabrication is rejected, not detected.",
-      "pdfTitle": "PDF",
-      "pdfDesc": "Finalize is the only render. Clean LaTeX, in English and Chinese."
-    },
-    "bento": {
-      "kicker": "AI, kept honest",
-      "titlePrefix": "AI that shows",
-      "titleItalic": "its work.",
-      "requirementsTitle": "Reads the fine print for you",
-      "requirementsBody": "Joblit reads every job ad and pulls out the hard asks — 8+ years of Java, security clearance, work rights — as tags you can click to jump to the exact sentence in the ad. No AI guesswork here: the same ad always reads the same way.",
-      "summaryTitle": "The summary is checked at the door",
-      "summaryBody": "Tailoring rewrites your summary for the role — then three checks run before it can land. Fail any one, and the paste is rejected with the reason named.",
-      "summaryCheckRole": "Names the role you're applying for",
-      "summaryCheckNumbers": "Every number is already on your profile",
-      "summaryCheckSkills": "Every skill is already on your profile",
-      "indexTitle": "Skills are picked, never invented",
-      "indexBody": "For skills, the model can only answer with positions in your own skill bank — it never writes a skill name. A position that doesn't exist is rejected outright.",
-      "indexCaption": "The model returns positions, never names — it cannot invent a skill.",
-      "proofTitle": "Don't take this page's word for it",
-      "proofBody": "Every claim above is how the code is built — and the code is public.",
-      "proofOpenSource": "Open source — read every line on GitHub",
-      "proofTests": "2,000+ tests keep these claims pinned",
-      "proofNoKeys": "No model keys on the server — ever"
-    },
-    "faq": {
-      "title": "Questions, answered straight",
-      "items": {
-        "free": {
-          "q": "Is Joblit actually free?",
-          "a": "Yes. Sign in with GitHub or Google and everything works. Generation runs on the AI subscription you already have, so there is no per-token bill from us and no paid tier hiding the good parts."
-        },
-        "privacy": {
-          "q": "Where does my data go?",
-          "a": "Your jobs, resume profile, and drafts live in your Joblit workspace. Generation happens in your own chatbot, on your own account — the servers hold no model key and cannot call a model. That is enforced by the architecture, not promised by a policy."
-        },
-        "byoai": {
-          "q": "Do I have to run my own AI?",
-          "a": "There is nothing to install and nothing to run. Joblit prepares the exact prompt; you paste it into whatever chatbot you already use and paste the JSON back — that loop is the product, not a workaround. If you use Claude Code, an optional Skill Pack automates the same loop with your own rules."
-        }
-      }
-    },
-    "cta": {
-      "titlePrefix": "Spend less time rewriting.",
-      "titleItalic": "Keep applications moving.",
-      "primary": "Start free"
-    },
-    "footer": {
-      "tagline": "The AI job-search workstation. Fetch, tailor, apply. Built by people who got tired of the rest.",
-      "product": {
-        "heading": "Product",
-        "jobs": "Jobs",
-        "resume": "Resume studio"
-      },
-      "resources": {
-        "heading": "Resources",
-        "reportIssue": "Report an issue"
-      },
-      "legal": {
-        "heading": "Legal",
-        "privacy": "Privacy",
-        "terms": "Terms"
-      },
-      "copyright": "© 2026 Joblit Labs. All rights reserved.",
-      "designed": "Designed in Sydney · Built for candidates everywhere"
+      "openApp": "Open app"
     }
   },
   "tailor": {
@@ -804,6 +668,258 @@
       "refreshApp": "Refresh app",
       "message": "The app hit an unexpected error. Try again — if it keeps happening, reload the page.",
       "backToJobs": "Back to jobs"
+    }
+  },
+  "landingExperience": {
+    "nav": {
+      "primary": "Primary navigation",
+      "home": "Joblit home",
+      "workflow": "The workflow",
+      "features": "Features",
+      "faq": "FAQ",
+      "demo": "Explore the demo",
+      "workspace": "Open workspace",
+      "github": "View on GitHub",
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu",
+      "language": "Change language",
+      "skip": "Skip to content"
+    },
+    "hero": {
+      "eyebrow": "YOUR AUSTRALIAN JOB SEARCH. CONNECTED.",
+      "title1": "Your next chapter.",
+      "title2": "All in one place.",
+      "description": "Find Australian roles, shape an application around your real experience, and keep every next step in view. Meet your personal job search workstation.",
+      "primary": "Explore the demo",
+      "secondary": "Open workspace",
+      "proof1": "Built for Australian roles",
+      "proof2": "Grounded in your experience",
+      "proof3": "Open source",
+      "scroll": "Scroll to see it come together",
+      "pause": "Pause motion",
+      "resume": "Resume motion",
+      "sceneLabel": "A three-dimensional job search workstation connecting job opportunities, a resume, and application documents"
+    },
+    "story": {
+      "eyebrow": "FROM OPPORTUNITY TO APPLICATION",
+      "title": "A clearer path to your next role.",
+      "description": "Three connected steps. Scroll to explore, or choose a step.",
+      "steps": [
+        {
+          "label": "DISCOVER",
+          "title": "Bring your opportunities into focus.",
+          "description": "Gather Australian LinkedIn roles in one place. See the requirements and go straight to the words behind them."
+        },
+        {
+          "label": "TAILOR",
+          "title": "Make your experience the story.",
+          "description": "Connect a role with your resume. Tailor your summary and highlight relevant skills you already have."
+        },
+        {
+          "label": "PREPARE",
+          "title": "Leave with something ready to send.",
+          "description": "Create a resume and cover letter, review the details, and download polished PDFs. Keep the application in view."
+        }
+      ],
+      "illustrative": "Illustrative example",
+      "requiredExperience": "Required experience",
+      "experienceExample": "3+ years",
+      "existingSkills": "Skills from your profile",
+      "documents": "Your application documents"
+    },
+    "features": {
+      "eyebrow": "BUILT AROUND YOUR NEXT MOVE",
+      "title": "Less to juggle.\nMore room to focus.",
+      "description": "The details that make a job search feel manageable, from the first interesting role to the finished application.",
+      "discoveryTitle": "Australian roles, in one place.",
+      "discoveryDescription": "Bring LinkedIn opportunities into your workspace and scan the role, company, location and seniority together.",
+      "requirementsTitle": "Know what the role really asks.",
+      "requirementsDescription": "See the required experience, then jump to its source in the job description. Make your own call with the context in front of you.",
+      "tailoringTitle": "Your experience. More relevant.",
+      "tailoringDescription": "Adapt your summary and select relevant skills from your existing profile. Your career history stays yours; AI does not rewrite your experience.",
+      "pdfTitle": "A considered finish.",
+      "pdfDescription": "Create a tailored resume and cover letter, review the result, then download clean LaTeX PDFs for your application.",
+      "versionsTitle": "A profile you can build on.",
+      "versionsDescription": "Keep resume versions for different directions. Auto-save keeps your edits as you refine your profile.",
+      "trackingTitle": "Know where every application stands.",
+      "trackingDescription": "Move roles between New, Applied and Rejected. Keep a clear record as your search moves forward.",
+      "previewLabel": "Illustrative product view",
+      "workspaceTitle": "Your opportunity, in context",
+      "roleTitle": "Full Stack Engineer",
+      "roleMeta": "Sydney, Australia · Full time",
+      "experienceLabel": "Required experience",
+      "experienceValue": "3+ years",
+      "sourceLabel": "From the job description",
+      "sourceQuote": "“3+ years of experience building and maintaining web applications.”",
+      "resumeLabel": "TAILORED RESUME",
+      "resumeName": "Alex Morgan",
+      "resumeRole": "Software Engineer",
+      "summaryLabel": "PROFILE",
+      "summaryText": "Software engineer building thoughtful web applications with React, TypeScript and cloud platforms.",
+      "skillsLabel": "RELEVANT SKILLS",
+      "experienceUnchanged": "Your original experience, preserved",
+      "documentReady": "Resume + cover letter",
+      "pdfBadge": "PDF",
+      "versionLabel": "Resume versions",
+      "versionGeneral": "General profile",
+      "versionEngineering": "Software engineering",
+      "autosaved": "Changes saved",
+      "newStatus": "New",
+      "appliedStatus": "Applied",
+      "rejectedStatus": "Rejected",
+      "trackingLabel": "A place for every next step"
+    },
+    "gettingStarted": {
+      "eyebrow": "START WITH WHAT IS YOURS",
+      "title": "Bring your experience.\nBuild from there.",
+      "description": "Explore the demo without signing in. When you are ready, open the workspace and add your profile.",
+      "step1Title": "Make it your workspace",
+      "step1Description": "Sign in with Google or GitHub, then add your resume profile.",
+      "step2Title": "Find your next opportunity",
+      "step2Description": "Fetch Australian roles and choose where to focus.",
+      "step3Title": "Connect local AI generation",
+      "step3Description": "Tailoring currently needs Hermes configured and running on your own computer with your own model account. Follow the setup guide before generating documents.",
+      "setupLink": "Read the generation setup guide",
+      "note": "The demo uses example data. Live generation requires your own setup."
+    },
+    "faq": {
+      "eyebrow": "A FEW THINGS TO KNOW",
+      "title": "Before your next move.",
+      "items": [
+        {
+          "question": "Who is Joblit for?",
+          "answer": "Joblit is a personal workspace for people looking for work in Australia, with particular focus on technical and knowledge-based roles. Current job discovery brings in Australian LinkedIn listings."
+        },
+        {
+          "question": "Can I try it before setting up AI?",
+          "answer": "Yes. The interactive demo uses example roles and application content, with no sign-in or model connection. To generate your own documents in the workspace, you need a resume profile and Hermes configured on your computer."
+        },
+        {
+          "question": "What can AI change in my resume?",
+          "answer": "Resume tailoring can adapt your summary and select relevant skills already in your profile. It does not rewrite your career experience. You can also create a cover letter and review the generated content before using it."
+        },
+        {
+          "question": "Does Joblit submit applications for me?",
+          "answer": "No. Joblit helps you discover roles, prepare documents and track your application status. You review your materials and submit the application yourself on the employer or job platform."
+        }
+      ]
+    },
+    "finalCta": {
+      "eyebrow": "YOUR NEXT CHAPTER STARTS HERE",
+      "title": "Give your search\na place to come together.",
+      "description": "One workspace for your opportunities, your experience, and the application you want to send.",
+      "primary": "Open your workspace",
+      "secondary": "Try the demo first"
+    },
+    "footer": {
+      "tagline": "A little more clarity.\nA lot more direction.",
+      "product": "Explore",
+      "workspace": "Workspace",
+      "demo": "Interactive demo",
+      "setup": "Generation setup",
+      "project": "The project",
+      "source": "Source code",
+      "issue": "Report an issue",
+      "legal": "Legal",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "copyright": "© Joblit contributors.",
+      "note": "Open source. Built for the next chapter."
+    },
+    "demo": {
+      "eyebrow": "THE WORKSPACE, IN YOUR HANDS",
+      "title": "Try your next application.",
+      "description": "Explore a role, inspect its requirements and open Tailor. The same flow as Joblit, with a fictional profile and prepared sample documents.",
+      "label": "Interactive product demo",
+      "navigation": "Sample workspace navigation",
+      "sample": "Sample workspace",
+      "sampleNote": "Fictional jobs and profile. Your choices stay in this demo; nothing is saved or sent.",
+      "localNote": "Live AI generation uses your local Hermes service. This demo opens prepared samples and needs no setup.",
+      "jobs": "Jobs",
+      "fetch": "Fetch",
+      "resume": "Resume",
+      "cover": "Cover Letter",
+      "reset": "Reset demo",
+      "resetStatus": "Demo reset. All three sample jobs are New and sample documents are cleared.",
+      "jobList": "Sample jobs",
+      "searchPlaceholder": "e.g. software engineer",
+      "filterLabel": "Filter jobs by status",
+      "statuses": {
+        "NEW": "New",
+        "APPLIED": "Applied",
+        "REJECTED": "Rejected"
+      },
+      "hoursAgo": "{count} hours ago",
+      "fullTime": "Full time",
+      "sampleSource": "Sample",
+      "resultCount": "{count, plural, one {# sample role} other {# sample roles}}",
+      "emptyTitle": "No roles here yet",
+      "emptySearch": "Try another keyword or clear your search to see the sample roles.",
+      "emptyStatus": "Change a role's status in its details to move it here. Reset restores every sample.",
+      "clearSearch": "Clear search",
+      "detail": "Role details",
+      "backToList": "All sample roles",
+      "jobStatus": "Job status",
+      "statusChanged": "{title} moved to {status}.",
+      "tailor": "Tailor",
+      "savedCv": "Saved CV",
+      "savedCl": "Saved CL",
+      "openJob": "Open job",
+      "samplePostingNewTab": " — sample posting, opens in a new tab",
+      "removeJob": "Remove sample job",
+      "removedStatus": "Sample job removed. Reset demo to restore it.",
+      "requirements": "Role requirements",
+      "requiredExperience": "Required experience",
+      "technology": "Technology",
+      "viewInJd": "View in JD",
+      "sourceFound": "The experience requirement is highlighted in the sample job description.",
+      "jobDescription": "Job description",
+      "aboutYou": "About you",
+      "readOnlySample": "Read-only sample",
+      "fetchTitle": "Find roles. Bring them into focus.",
+      "fetchDescription": "In Joblit, Fetch searches supported Australian job sources and brings roles into Jobs for review.",
+      "fetchSampleNote": "This demo already contains three prepared roles. It does not run a live job search.",
+      "keywords": "Keywords",
+      "location": "Location",
+      "viewExampleResults": "Explore sample roles",
+      "originalProfile": "Your source resume",
+      "profileDescription": "Every example uses Alex's fictional source profile. Tailor opens from a job; this page is the shared resume that informs it.",
+      "backToJobs": "Back to Jobs",
+      "summary": "Summary",
+      "skills": "Skills",
+      "experience": "Experience",
+      "dialogTitle": "Tailor this application",
+      "close": "Close tailoring demo",
+      "documentTargets": "Application documents",
+      "generateExample": "Show generated example",
+      "resumeReadyTitle": "A resume shaped for this role",
+      "resumeReadyBody": "See a focused summary and skills selected from Alex's existing profile. The original experience stays intact.",
+      "coverReadyTitle": "A cover letter for this role",
+      "coverReadyBody": "See three focused paragraphs connecting Alex's experience to this role. The cover letter is prepared separately from the resume.",
+      "preparedLabel": "Prepared sample · no AI request",
+      "preparedNote": "The live action generates, checks and publishes one PDF. Here, the button immediately shows a prepared example of that result.",
+      "showAgain": "About this generated example",
+      "publishedSample": "Published sample",
+      "sampleReady": "{target} example ready. Its sample PDF is available below.",
+      "review": "Review",
+      "publish": "Publish",
+      "readOnlyReview": "Read-only example. In the workspace, you can edit this content and publish an updated PDF.",
+      "tailoredSummary": "Tailored summary",
+      "compareOriginal": "Compare with the original summary",
+      "selectedSkills": "Selected skills",
+      "existingSkillsOnly": "Selected and ordered from the source resume's existing skills.",
+      "experiencePreserved": "Original experience is preserved in the sample PDF.",
+      "paragraph": "Paragraph {count}",
+      "viewPublished": "View published sample",
+      "publicationNote": "The first PDF is published automatically. In the workspace, Publish updates it after your edits.",
+      "staticPdfNote": "This is a prepared, fictional PDF. It matches the read-only content shown in Review.",
+      "openPdf": "Open sample PDF",
+      "newTab": " — opens in a new tab",
+      "dialogFooter": "Sample documents only. No personal data, live generation or saved changes.",
+      "emptyRemoved": "All sample roles have been removed. Restore the samples to start again.",
+      "restoreSamples": "Restore sample roles",
+      "reviewLocked": "After opening an example, inspect its prepared summary, selected skills or cover letter.",
+      "publishLocked": "The example includes a ready PDF. Open the file to see the published result."
     }
   }
 }

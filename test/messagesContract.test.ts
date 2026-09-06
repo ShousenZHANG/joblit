@@ -45,7 +45,7 @@ function leafPaths(value: unknown, prefix = "", acc: string[] = []): string[] {
  */
 const DYNAMIC_KEY_PREFIXES: readonly { pattern: RegExp; callSite: string }[] = [
   { pattern: /^guide\.task_/, callSite: "components/guide/GuideTaskList.tsx — t(`task_${task.id}_title`)" },
-  { pattern: /^landing\.logoBar\.items\./, callSite: "components/landing/LogoBar.tsx — t(`items.${key}`)" },
+  { pattern: /^landingExperience\.gettingStarted\.step\d(?:Title|Description)$/, callSite: "components/landing/ProductSections.tsx — t(`gettingStarted.step${step}Title`), t(`gettingStarted.step${step}Description`)" },
 ];
 
 const SOURCE_ROOTS = ["app", "components", "lib", "hooks", "i18n", "test", "integrations"];

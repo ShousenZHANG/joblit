@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, type ElementType, type ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, type LucideIcon } from "lucide-react";
 import { useResumeContext } from "./ResumeContext";
 import type { SectionId } from "./constants";
 import { cn } from "@/lib/utils";
 
 interface SectionShellProps {
   id: SectionId;
-  icon: ElementType;
+  icon: LucideIcon;
   title: string;
   description?: string;
   /**

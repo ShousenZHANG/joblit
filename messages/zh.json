@@ -560,143 +560,7 @@
   "landing": {
     "nav": {
       "startFree": "免费开始",
-      "openApp": "打开应用",
-      "logIn": "登录",
-      "primary": "主导航",
-      "home": "Joblit 首页",
-      "github": "在 GitHub 上查看 Joblit",
-      "openMenu": "打开菜单",
-      "closeMenu": "关闭菜单",
-      "howItWorks": "工作原理",
-      "architecture": "架构",
-      "faq": "常见问题"
-    },
-    "hero": {
-      "eyebrowNew": "新",
-      "eyebrowTagline": "本地优先 · 开源 · 为澳洲求职而生",
-      "titleLine1": "求职流程，",
-      "titleItalic": "重新定义。",
-      "subtitle": "Joblit 把澳洲职位汇入一个工作台，为每份 JD 组装精确的定制提示词。你把它粘进自己常用的聊天助手，再把结果粘回来，导出整洁的 LaTeX PDF——Joblit 的服务器不持有任何模型密钥。",
-      "startFree": "免费开始",
-      "viewSource": "查看源码",
-      "metaFree": "所有人免费开放 · 无需信用卡 · Google 或 GitHub 登录"
-    },
-    "logoBar": {
-      "heading": "引擎盖之下",
-      "items": {
-        "intake": {
-          "value": "LinkedIn 岗位发现",
-          "label": "澳大利亚岗位入口"
-        },
-        "screening": {
-          "value": "澳大利亚高召回筛选",
-          "label": "资格与职级策略"
-        },
-        "byom": {
-          "value": "你自己的聊天助手——Joblit 不持有模型密钥",
-          "label": "本地优先生成"
-        }
-      }
-    },
-    "flow": {
-      "kicker": "工作流",
-      "titlePrefix": "从职位列表到",
-      "titleItalic": "定稿 PDF。",
-      "steps": {
-        "fetch": {
-          "title": "抓取",
-          "body": "一次运行把新职位汇入一个列表。重复项和失效链接在你看到之前就被过滤掉了。"
-        },
-        "triage": {
-          "title": "筛选",
-          "body": "每份启事的硬性要求已经替你划出来，扫一眼就能只留下值得投的职位。"
-        },
-        "generate": {
-          "title": "定制",
-          "body": "把准备好的提示词复制进任意聊天助手，把 JSON 粘回来，审阅后发布。只有摘要和技能顺序会变——你的经历要点一个字都不动。"
-        },
-        "export": {
-          "title": "导出",
-          "body": "每份草稿先回来给你审阅，然后编译成整洁的 LaTeX PDF——命名妥当，随时可发。"
-        }
-      }
-    },
-    "architecture": {
-      "kicker": "架构",
-      "titlePrefix": "带上你自己的",
-      "titleItalic": "聊天助手。",
-      "lede": "Joblit 负责组装精确的提示词，并检查粘贴回来的结果——写作发生在你已经在付费的任意聊天助手里。服务器不持有任何模型密钥，想调用模型也做不到。这由架构保证，而不是一纸承诺。",
-      "workspaceTitle": "Joblit 工作台",
-      "workspaceDesc": "基于你的简历档案和规则组装精确提示词——不持有任何模型密钥。",
-      "chatbotTitle": "你的聊天助手",
-      "chatbotDesc": "你已经在付费的任意助手——Claude、ChatGPT、Gemini。",
-      "boundaryLabel": "你的账号",
-      "boundaryCaption": "Joblit 永远看不到你的模型账号。",
-      "gatesTitle": "确定性关卡",
-      "gatesDesc": "摘要检查加技能索引解析——伪造内容直接被拒绝，而不是靠事后检测。",
-      "pdfTitle": "PDF",
-      "pdfDesc": "Finalize 是唯一的渲染入口。整洁的 LaTeX，中英双语。"
-    },
-    "bento": {
-      "kicker": "AI,可被审计",
-      "titlePrefix": "会",
-      "titleItalic": "亮出证据的 AI。",
-      "requirementsTitle": "替你读完招聘启事的小字",
-      "requirementsBody": "Joblit 会通读每份招聘启事，把硬性要求——8 年以上 Java、安全许可、工作签证——逐条做成标签，点一下就跳到启事里的原句。这一步没有 AI 的猜测：同一份启事，读出来的结果永远一样。",
-      "summaryTitle": "摘要在入口处逐条核查",
-      "summaryBody": "定制会为目标岗位重写你的摘要——但落库之前要过三道检查。任何一道不过，这次粘贴就会被拒绝，并说明原因。",
-      "summaryCheckRole": "点名你要申请的岗位",
-      "summaryCheckNumbers": "每个数字都已在你的档案里",
-      "summaryCheckSkills": "每项技能都已在你的档案里",
-      "indexTitle": "技能只能挑选，不能编造",
-      "indexBody": "对于技能，模型只能用位置作答——指向你自己的技能库，它从不书写技能名称。不存在的位置会被直接拒绝。",
-      "indexCaption": "模型返回的是位置而不是名称——它编不出你没有的技能。",
-      "proofTitle": "别只听这页纸的一面之词",
-      "proofBody": "上面的每条主张都写在代码里，而代码是公开的。",
-      "proofOpenSource": "开源——每一行都可以在 GitHub 上读到",
-      "proofTests": "2,000+ 个测试钉住这些主张",
-      "proofNoKeys": "服务器上没有模型密钥——永远没有"
-    },
-    "faq": {
-      "title": "直接回答你的疑问",
-      "items": {
-        "free": {
-          "q": "Joblit 真的免费吗?",
-          "a": "是。用 GitHub 或 Google 登录即可使用全部功能。生成跑在你已有的 AI 订阅上,我们不按 token 收费,也没有把好功能藏进付费档。"
-        },
-        "privacy": {
-          "q": "我的数据去了哪里?",
-          "a": "你的职位、简历档案和草稿保存在你的 Joblit 工作区。生成发生在你自己的聊天助手里、用你自己的账号——服务器不持有模型密钥,想调用模型也做不到。这由架构保证,而不是一纸承诺。"
-        },
-        "byoai": {
-          "q": "必须自己跑 AI 吗?",
-          "a": "什么都不用装，什么都不用跑。Joblit 准备好精确的提示词，你把它粘进自己常用的任意聊天助手，再把 JSON 粘回来——这个循环本身就是产品，不是退而求其次的方案。如果你在用 Claude Code，可选的 Skill Pack 会带着你的规则把同一个循环自动化。"
-        }
-      }
-    },
-    "cta": {
-      "titlePrefix": "少花时间重复改简历，",
-      "titleItalic": "让申请持续推进。",
-      "primary": "免费开始"
-    },
-    "footer": {
-      "tagline": "AI 求职工作台。抓取、定制、申请。由厌倦现状的人打造。",
-      "product": {
-        "heading": "产品",
-        "jobs": "岗位",
-        "resume": "简历工作室"
-      },
-      "resources": {
-        "heading": "资源",
-        "reportIssue": "报告问题"
-      },
-      "legal": {
-        "heading": "法律",
-        "privacy": "隐私政策",
-        "terms": "使用条款"
-      },
-      "copyright": "© 2026 Joblit Labs. 保留所有权利。",
-      "designed": "设计于悉尼 · 为全球求职者打造"
+      "openApp": "打开应用"
     }
   },
   "tailor": {
@@ -804,6 +668,258 @@
       "refreshApp": "刷新应用",
       "message": "应用遇到意外错误。请重试 —— 如果仍然发生，请刷新页面。",
       "backToJobs": "返回职位"
+    }
+  },
+  "landingExperience": {
+    "nav": {
+      "primary": "主导航",
+      "home": "Joblit 首页",
+      "workflow": "工作流程",
+      "features": "产品功能",
+      "faq": "常见问题",
+      "demo": "体验演示",
+      "workspace": "进入工作台",
+      "github": "在 GitHub 查看源码",
+      "openMenu": "打开菜单",
+      "closeMenu": "关闭菜单",
+      "language": "切换语言",
+      "skip": "跳转到正文"
+    },
+    "hero": {
+      "eyebrow": "让你的澳洲求职，井然有序",
+      "title1": "下一段职业旅程，",
+      "title2": "在这里展开。",
+      "description": "发现澳洲职位，让真实经历成为申请的亮点，清楚掌握每一步进展。这是为你准备的个人求职工作台。",
+      "primary": "体验演示",
+      "secondary": "进入工作台",
+      "proof1": "专注澳洲职位",
+      "proof2": "基于你的真实经历",
+      "proof3": "开放源码",
+      "scroll": "向下滚动，看流程逐步展开",
+      "pause": "暂停动态效果",
+      "resume": "恢复动态效果",
+      "sceneLabel": "三维求职工作站，将职位机会、个人简历与申请材料连接在一起"
+    },
+    "story": {
+      "eyebrow": "从发现机会，到准备申请",
+      "title": "让下一步，变得清晰。",
+      "description": "三个相连的步骤。滚动探索，或直接选择一步。",
+      "steps": [
+        {
+          "label": "发现",
+          "title": "让值得关注的机会浮现。",
+          "description": "集中查看澳洲 LinkedIn 职位，了解经验要求，直接回到职位描述中的原文。"
+        },
+        {
+          "label": "定制",
+          "title": "让你的经历，切中岗位。",
+          "description": "将职位与你的简历连接，调整个人摘要，突出你已经具备的相关技能。"
+        },
+        {
+          "label": "准备",
+          "title": "把机会，变成准备好的申请。",
+          "description": "生成简历和求职信，检查细节，下载整洁的 PDF，并持续记录申请进展。"
+        }
+      ],
+      "illustrative": "效果示意",
+      "requiredExperience": "所需经验",
+      "experienceExample": "3 年以上",
+      "existingSkills": "来自已有档案的技能",
+      "documents": "你的申请材料"
+    },
+    "features": {
+      "eyebrow": "围绕你的下一步而设计",
+      "title": "少一点忙乱，\n多一点专注。",
+      "description": "从发现感兴趣的职位，到准备好申请材料，让每个细节都有合适的位置。",
+      "discoveryTitle": "澳洲职位，集中掌握。",
+      "discoveryDescription": "把 LinkedIn 职位带入工作台，一起查看岗位、公司、地点与经验层级。",
+      "requirementsTitle": "看清岗位，真正需要什么。",
+      "requirementsDescription": "查看所需经验，直接定位到职位描述原文。带着完整上下文，做出自己的判断。",
+      "tailoringTitle": "真实的经历，更贴合的表达。",
+      "tailoringDescription": "按岗位调整个人摘要，选出已有档案中的相关技能。职业经历始终属于你，AI 不会重写你的经历。",
+      "pdfTitle": "让申请，有一个漂亮的收尾。",
+      "pdfDescription": "生成针对岗位的简历和求职信，检查结果，再下载排版整洁的 LaTeX PDF。",
+      "versionsTitle": "让档案，随你的方向成长。",
+      "versionsDescription": "为不同求职方向保留简历版本。编辑自动保存，让你专注打磨个人档案。",
+      "trackingTitle": "每份申请，都有清晰进展。",
+      "trackingDescription": "在「新职位」「已申请」「已拒绝」间更新状态，让求职过程始终有迹可循。",
+      "previewLabel": "产品界面示意",
+      "workspaceTitle": "完整上下文，清晰的机会",
+      "roleTitle": "全栈工程师",
+      "roleMeta": "澳大利亚悉尼 · 全职",
+      "experienceLabel": "所需经验",
+      "experienceValue": "3 年以上",
+      "sourceLabel": "职位描述原文",
+      "sourceQuote": "“具备 3 年以上 Web 应用开发与维护经验。”",
+      "resumeLabel": "岗位定制简历",
+      "resumeName": "Alex Morgan",
+      "resumeRole": "软件工程师",
+      "summaryLabel": "个人摘要",
+      "summaryText": "使用 React、TypeScript 与云平台，构建注重用户体验的 Web 应用的软件工程师。",
+      "skillsLabel": "相关技能",
+      "experienceUnchanged": "完整保留你的原始经历",
+      "documentReady": "简历 + 求职信",
+      "pdfBadge": "PDF",
+      "versionLabel": "简历版本",
+      "versionGeneral": "通用档案",
+      "versionEngineering": "软件工程方向",
+      "autosaved": "修改已保存",
+      "newStatus": "新职位",
+      "appliedStatus": "已申请",
+      "rejectedStatus": "已拒绝",
+      "trackingLabel": "每个下一步，都有位置"
+    },
+    "gettingStarted": {
+      "eyebrow": "从属于你的经历开始",
+      "title": "带上真实经历，\n准备下一步。",
+      "description": "无需登录，即可体验演示。准备好后，进入工作台，建立你的个人档案。",
+      "step1Title": "建立你的工作台",
+      "step1Description": "使用 Google 或 GitHub 登录，添加你的简历档案。",
+      "step2Title": "发现下一份机会",
+      "step2Description": "获取澳洲职位，选出值得投入的方向。",
+      "step3Title": "连接本地 AI 生成",
+      "step3Description": "目前，定制生成需要在你自己的电脑上配置并运行 Hermes，使用你自己的模型账号。生成材料前，请先完成设置指南。",
+      "setupLink": "查看生成设置指南",
+      "note": "演示使用示例数据。实际生成需要完成你自己的配置。"
+    },
+    "faq": {
+      "eyebrow": "开始之前，你可能想了解",
+      "title": "把问题，也想清楚。",
+      "items": [
+        {
+          "question": "Joblit 适合谁？",
+          "answer": "Joblit 是面向澳洲求职者的个人工作台，重点支持技术与知识型岗位。目前，职位获取支持澳大利亚的 LinkedIn 职位。"
+        },
+        {
+          "question": "配置 AI 之前，可以先体验吗？",
+          "answer": "可以。交互演示使用示例职位和申请内容，无需登录或连接模型。在工作台生成自己的材料时，需要先建立简历档案，并在电脑上配置 Hermes。"
+        },
+        {
+          "question": "AI 会修改简历的哪些部分？",
+          "answer": "简历定制可以调整个人摘要，并从已有档案中选择相关技能，不会重写你的职业经历。你也可以生成求职信，并在使用前检查生成内容。"
+        },
+        {
+          "question": "Joblit 会自动帮我投递吗？",
+          "answer": "不会。Joblit 帮你发现职位、准备材料并记录申请状态。你检查材料后，自行前往雇主或招聘平台提交申请。"
+        }
+      ]
+    },
+    "finalCta": {
+      "eyebrow": "下一段旅程，从这里开始",
+      "title": "让你的求职，\n在这里有序展开。",
+      "description": "一个工作台，放下你的机会、真实经历，以及想要递出的那份申请。",
+      "primary": "进入你的工作台",
+      "secondary": "先体验演示"
+    },
+    "footer": {
+      "tagline": "让方向更清晰，\n让下一步更从容。",
+      "product": "探索产品",
+      "workspace": "工作台",
+      "demo": "交互演示",
+      "setup": "生成设置",
+      "project": "开源项目",
+      "source": "源代码",
+      "issue": "反馈问题",
+      "legal": "法律信息",
+      "privacy": "隐私政策",
+      "terms": "服务条款",
+      "copyright": "© Joblit 贡献者。",
+      "note": "开放源码，为下一段旅程而构建。"
+    },
+    "demo": {
+      "eyebrow": "亲手体验，真实流程",
+      "title": "从一份职位，开始下一次申请。",
+      "description": "查看职位、定位要求，再打开 Tailor。沿用 Joblit 的实际操作流程，以虚构履历和准备好的示例材料体验。",
+      "label": "交互式产品演示",
+      "navigation": "示例工作台导航",
+      "sample": "示例工作台",
+      "sampleNote": "职位与履历均为虚构示例。操作仅在演示中生效，不会保存或发送。",
+      "localNote": "实际 AI 生成使用你的本地 Hermes 服务。本演示打开准备好的示例，无需安装。",
+      "jobs": "职位",
+      "fetch": "获取",
+      "resume": "简历",
+      "cover": "求职信",
+      "reset": "重置演示",
+      "resetStatus": "演示已重置。三个示例职位均恢复为新职位，示例材料状态已清除。",
+      "jobList": "示例职位",
+      "searchPlaceholder": "搜索职位、公司或技术",
+      "filterLabel": "按申请状态筛选",
+      "statuses": {
+        "NEW": "新职位",
+        "APPLIED": "已申请",
+        "REJECTED": "已拒绝"
+      },
+      "hoursAgo": "{count} 小时前",
+      "fullTime": "全职",
+      "sampleSource": "示例",
+      "resultCount": "{count} 个示例职位",
+      "emptyTitle": "这里还没有职位",
+      "emptySearch": "换个关键词，或清空搜索后查看示例职位。",
+      "emptyStatus": "在职位详情中更改状态，即可将职位移到这里。重置可恢复所有示例。",
+      "clearSearch": "清空搜索",
+      "detail": "职位详情",
+      "backToList": "全部示例职位",
+      "jobStatus": "职位状态",
+      "statusChanged": "{title} 已移至{status}。",
+      "tailor": "Tailor 定制",
+      "savedCv": "已存简历",
+      "savedCl": "已存求职信",
+      "openJob": "打开职位",
+      "samplePostingNewTab": " — 示例招聘页面，在新标签页打开",
+      "removeJob": "移除示例职位",
+      "removedStatus": "示例职位已移除，可通过重置演示恢复。",
+      "requirements": "岗位要求",
+      "requiredExperience": "经验要求",
+      "technology": "技术要求",
+      "viewInJd": "定位 JD 原文",
+      "sourceFound": "已在示例职位描述中定位并高亮经验要求原文。",
+      "jobDescription": "职位描述",
+      "aboutYou": "任职要求",
+      "readOnlySample": "只读示例",
+      "fetchTitle": "找到职位，再集中筛选。",
+      "fetchDescription": "在 Joblit 中，获取页面会从支持的澳洲职位来源搜索岗位，再带入职位工作台供你查看。",
+      "fetchSampleNote": "本演示已准备三个示例职位，不会执行实时职位搜索。",
+      "keywords": "关键词",
+      "location": "地点",
+      "viewExampleResults": "查看示例职位",
+      "originalProfile": "原始简历",
+      "profileDescription": "所有示例都以 Alex 的虚构履历为基础。Tailor 从职位详情打开，这里展示它使用的原始简历。",
+      "backToJobs": "返回职位",
+      "summary": "个人摘要",
+      "skills": "技能",
+      "experience": "工作经历",
+      "dialogTitle": "定制这份申请",
+      "close": "关闭定制演示",
+      "documentTargets": "申请材料",
+      "generateExample": "查看生成结果示例",
+      "resumeReadyTitle": "针对这份职位的简历",
+      "resumeReadyBody": "查看更有针对性的摘要，以及从 Alex 原始技能中筛选出的内容。工作经历保持原文。",
+      "coverReadyTitle": "针对这份职位的求职信",
+      "coverReadyBody": "通过三个段落，展示 Alex 的经历与岗位之间的联系。求职信与简历分别生成。",
+      "preparedLabel": "预置示例 · 不调用 AI",
+      "preparedNote": "实际操作会生成、检查并发布当前材料的 PDF。这里直接展示预先准备的结果示例。",
+      "showAgain": "关于这份生成结果示例",
+      "publishedSample": "已发布示例",
+      "sampleReady": "{target}示例已就绪，可在下方打开对应 PDF。",
+      "review": "检查内容",
+      "publish": "发布",
+      "readOnlyReview": "此处为只读示例。在实际工作台中，你可以编辑内容，再发布更新后的 PDF。",
+      "tailoredSummary": "定制摘要",
+      "compareOriginal": "对比原始摘要",
+      "selectedSkills": "所选技能",
+      "existingSkillsOnly": "从原始简历已有技能中选择，并按相关性排序。",
+      "experiencePreserved": "示例 PDF 中的工作经历保持原文。",
+      "paragraph": "第 {count} 段",
+      "viewPublished": "查看已发布示例",
+      "publicationNote": "首次生成会自动发布 PDF。在实际工作台修改内容后，可通过发布更新文件。",
+      "staticPdfNote": "这是预先准备的虚构 PDF，与检查内容中展示的只读材料一致。",
+      "openPdf": "打开示例 PDF",
+      "newTab": " — 在新标签页打开",
+      "dialogFooter": "仅示例材料，不读取个人数据、不实时生成、不保存修改。",
+      "emptyRemoved": "所有示例职位均已移除。恢复示例即可重新体验。",
+      "restoreSamples": "恢复示例职位",
+      "reviewLocked": "打开生成结果示例后，可检查预置的摘要、所选技能或求职信。",
+      "publishLocked": "示例包含已准备好的 PDF，可打开文件查看发布结果。"
     }
   }
 }

@@ -9,7 +9,8 @@ const css = readFileSync(resolve(process.cwd(), "app/globals.css"), "utf8").repl
   "\n",
 );
 
-describe("landing motion CSS contracts", () => {
+// The login page still uses Starfield after the landing moved to WebGL.
+describe("shared starfield motion CSS contracts", () => {
   it("pauses starfield animation after all light-mode animation shorthands", () => {
     const lastShimmerDeclaration = css.lastIndexOf("animation: star-shimmer");
     const lightPauseRule = css.indexOf(

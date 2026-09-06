@@ -1,5 +1,4 @@
-import { Briefcase, FileText, Search, Send, Sparkles } from "lucide-react";
-import type { ElementType } from "react";
+import { Briefcase, FileText, Search, Send, Sparkles, type LucideIcon } from "lucide-react";
 import {
   ONBOARDING_TASKS,
   type OnboardingChecklist,
@@ -7,7 +6,7 @@ import {
 } from "@/lib/onboarding";
 
 /** Per-task icon used across the Quick Start panel and task timeline. */
-export const TASK_ICONS: Record<OnboardingTaskId, ElementType> = {
+export const TASK_ICONS: Record<OnboardingTaskId, LucideIcon> = {
   resume_setup: FileText,
   first_fetch: Search,
   review_jobs: Briefcase,
