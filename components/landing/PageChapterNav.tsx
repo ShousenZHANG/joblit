@@ -16,21 +16,30 @@ export function PageChapterNav() {
   useEffect(() => {
     const media = window.matchMedia(railQuery);
     let frame: number | null = null;
+    let layoutChanged = true;
+    let anchors: { id: string; top: number }[] = [];
+    let scrollLength = 0;
 
-    const measure = () => {
+    // Section offsets move only when layout does. Reading them on every scroll
+    // frame would force a synchronous layout right after the frame's
+    // transforms were written; measure on layout change, then do arithmetic.
+    const measureLayout = () => {
+      const scrollTop = window.scrollY;
+      anchors = chapters.flatMap(id => {
+        const element = document.getElementById(id);
+        return element ? [{ id, top: element.getBoundingClientRect().top + scrollTop }] : [];
+      });
+      scrollLength = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+      layoutChanged = false;
+    };
+    const update = () => {
       frame = null;
       if (!media.matches) return;
-
-      const scrollTop = window.scrollY;
-      const viewportHeight = window.innerHeight;
-      const scrollLength = Math.max(0, document.documentElement.scrollHeight - viewportHeight);
-      const readingLine = viewportHeight * 0.3;
-      const anchors = chapters.flatMap(id => {
-        const element = document.getElementById(id);
-        return element ? [{ id, top: element.getBoundingClientRect().top }] : [];
-      });
+      if (layoutChanged) measureLayout();
       if (!anchors.length) return;
 
+      const scrollTop = window.scrollY;
+      const readingLine = scrollTop + window.innerHeight * 0.3;
       let selected = anchors[0].id;
       for (const anchor of anchors) {
         if (anchor.top <= readingLine) selected = anchor.id;
@@ -45,10 +54,14 @@ export function PageChapterNav() {
       }
     };
     const schedule = () => {
-      if (frame === null) frame = window.requestAnimationFrame(measure);
+      if (frame === null) frame = window.requestAnimationFrame(update);
+    };
+    const remeasure = () => {
+      layoutChanged = true;
+      schedule();
     };
 
-    const resizeObserver = new ResizeObserver(schedule);
+    const resizeObserver = new ResizeObserver(remeasure);
     // FAQ expansion, locale changes and the interactive demo can all change
     // section positions without a window resize or a new scroll event.
     resizeObserver.observe(document.getElementById("main-content") ?? document.documentElement);
@@ -57,15 +70,15 @@ export function PageChapterNav() {
       if (element) resizeObserver.observe(element);
     }
     window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    media.addEventListener("change", schedule);
-    schedule();
+    window.addEventListener("resize", remeasure);
+    media.addEventListener("change", remeasure);
+    remeasure();
     return () => {
       if (frame !== null) window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-      media.removeEventListener("change", schedule);
+      window.removeEventListener("resize", remeasure);
+      media.removeEventListener("change", remeasure);
     };
   }, []);
 
