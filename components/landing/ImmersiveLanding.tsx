@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { ArrowDown, ArrowRight, ArrowUpRight, Check, Pause, Play } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
@@ -39,6 +40,11 @@ export function ImmersiveLanding() {
   const workflow = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
   const { progress, activeStep, enhanced, selectStep } = useWorkflowProgress(workflow, reduced, paused);
+  // The pinned stage stays at the top of the viewport while the next section
+  // slides over it. Its lowest fifth already sits under the floor gradient, so
+  // dissolve it before that edge rises far enough to cut the cards in half.
+  const { scrollYProgress: journeyExit } = useScroll({ target: journey, offset: ["end end", "end start"] });
+  const dockOpacity = useTransform(journeyExit, [0, 0.2], [1, 0]);
   const [requested, setRequested] = useState(false);
   const [readiness, setReadiness] = useState({ reduced, ready: false });
   // A changed motion preference replaces the canvas. Keep its poster until the
@@ -68,10 +74,10 @@ export function ImmersiveLanding() {
     <main id="main-content" tabIndex={-1}>
       <section ref={journey} className={styles.journey} aria-labelledby="landing-title" data-layout={enhanced ? "cinematic" : "flow"} data-scene-state={reduced ? "reduced-motion" : unavailable ? "unavailable" : ready ? "ready" : requested ? "loading" : "pending"}>
         <div className={styles.stage}>
-          <div className={styles.sceneDock} aria-hidden="true">
+          <motion.div className={styles.sceneDock} aria-hidden="true" style={{ opacity: enhanced ? dockOpacity : 1 }}>
             <div className={`${styles.posterLayer} ${ready && sceneActive ? styles.posterHidden : ""}`}><WorkstationPoster className={styles.poster} /></div>
             {sceneActive && <div className={styles.canvasLayer}><SceneBoundary onUnavailable={() => setUnavailable(true)}><WorkstationScene dark={resolvedTheme === "dark"} progress={progress} paused={paused || !visible || !pageVisible} onReady={() => setReadiness({ reduced, ready: true })} onUnavailable={() => setUnavailable(true)} /></SceneBoundary></div>}
-          </div>
+          </motion.div>
           <div className={styles.stageFloor} aria-hidden="true" />
         </div>
         <div id="overview" className={styles.hero} tabIndex={-1}>

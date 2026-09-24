@@ -8,6 +8,7 @@ import { ImmersiveLanding } from "./ImmersiveLanding";
 const runtime = vi.hoisted(() => ({
   theme: "light",
   scroll: null as MotionValue<number> | null,
+  exit: null as MotionValue<number> | null,
   scene: vi.fn((_props: { dark: boolean; progress: MotionValue<number>; paused: boolean; onReady: () => void }) => null),
 }));
 // Observe the heavy-module boundary without creating a WebGL context in jsdom.
@@ -26,9 +27,11 @@ vi.mock("framer-motion", async (original) => {
     ...actual,
     // Exercise scene-target wiring; spring interpolation belongs to Framer.
     useSpring: (source: MotionValue<number>) => source,
-    useScroll: () => {
+    useScroll: (options?: { offset?: string[] }) => {
       const value = actual.useMotionValue(0);
-      runtime.scroll ??= value;
+      // The journey's exit timeline starts when its end meets the viewport's end.
+      if (options?.offset?.[0] === "end end") runtime.exit ??= value;
+      else runtime.scroll ??= value;
       return { scrollYProgress: value };
     },
   };
@@ -65,6 +68,7 @@ describe("ImmersiveLanding motion lifecycle", () => {
     vi.useFakeTimers();
     runtime.theme = "light";
     runtime.scroll = null;
+    runtime.exit = null;
     motionQuery = Object.assign(new EventTarget(), { matches: false });
     layoutQuery = Object.assign(new EventTarget(), { matches: true });
     window.matchMedia = query => (query.includes("min-width: 960px") ? layoutQuery : motionQuery) as MediaQueryList;
@@ -215,5 +219,30 @@ describe("ImmersiveLanding motion lifecycle", () => {
     act(() => { layoutQuery.matches = true; layoutQuery.dispatchEvent(new Event("change")); });
     expect(journey).toHaveAttribute("data-layout", "cinematic");
     expect(runtime.scene.mock.lastCall![0].progress.get()).toBe(.5);
+  });
+
+  it("dissolves the pinned stage before the next section's edge can cut through it", async () => {
+    // Framer applies motion values on its own animation frame; let real frames run.
+    vi.useRealTimers();
+    const settle = () => act(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    renderLanding();
+    const journey = screen.getByRole("heading", { level: 1 }).closest("section")!;
+    const dock = journey.querySelector<HTMLElement>(":scope > div > div")!;
+    const opacity = () => Number(dock.style.opacity);
+    expect(opacity()).toBe(1);
+
+    act(() => runtime.exit!.set(.1));
+    await settle();
+    expect(opacity()).toBeCloseTo(.5, 2);
+
+    act(() => runtime.exit!.set(.2));
+    await settle();
+    expect(opacity()).toBe(0);
+
+    // Readable flow has no pinned stage to cover, so the scene stays opaque.
+    act(() => { layoutQuery.matches = false; layoutQuery.dispatchEvent(new Event("change")); });
+    await settle();
+    expect(journey).toHaveAttribute("data-layout", "flow");
+    expect(opacity()).toBe(1);
   });
 });
