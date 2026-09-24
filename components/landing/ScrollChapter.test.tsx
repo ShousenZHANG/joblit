@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ScrollChapter, DepthLayer } from "./ScrollChapter";
 import { LandingMotionProvider } from "./lib/LandingMotion";
@@ -11,127 +11,109 @@ vi.mock("framer-motion", async importOriginal => {
 });
 
 describe("ScrollChapter progressive enhancement", () => {
-  let contentHeight = 500;
   let desktop = true;
   let reduced = false;
-  let resize: () => void;
 
   beforeEach(() => {
     scroll.current!.set(0.5);
-    contentHeight = 500;
     desktop = true;
     reduced = false;
-    vi.spyOn(window, "innerHeight", "get").mockReturnValue(900);
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(() => contentHeight);
-    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(() => contentHeight);
     vi.spyOn(window, "matchMedia").mockImplementation(query => ({
       matches: query.includes("prefers-reduced-motion") ? reduced : desktop,
       media: query,
       onchange: null,
       addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
     }));
-    vi.stubGlobal("ResizeObserver", class {
-      constructor(callback: () => void) { resize = callback; }
-      observe() {}
-      disconnect() {}
-    });
   });
 
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
   });
 
-  function chapter(interactive = false) {
+  function chapter(closing = false) {
     return render(<>
-      <ScrollChapter id="features" labelledBy="feature-heading" interactive={interactive}>
+      <ScrollChapter id="features" labelledBy="feature-heading" closing={closing}>
         <h2 id="feature-heading">Your experience</h2>
-        <DepthLayer depth={1.2} tilt={4}><button type="button">Open resume</button></DepthLayer>
+        <DepthLayer depth={1.2}><figure>Resume preview</figure></DepthLayer>
         <button type="button">Open cover letter</button>
       </ScrollChapter>
       <button type="button">Continue outside</button>
     </>);
   }
 
-  it("fits desktop content in a screen without hiding it or intercepting native scrolling", () => {
+  const layer = () => screen.getByText("Resume preview").parentElement as HTMLElement;
+  // Framer Motion applies style updates on its own animation frame, not during React's render.
+  const nextFrame = () => act(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+
+  it("keeps a labelled chapter in document flow without hiding content or intercepting native scrolling", () => {
     chapter();
     const region = screen.getByRole("region", { name: "Your experience" });
-    expect(region).toHaveAttribute("data-chapter-layout", "screen");
-    expect(screen.getByRole("button", { name: "Open resume" })).toBeVisible();
+    expect(region).toHaveAttribute("id", "features");
+    expect(region).toHaveAttribute("data-scroll-chapter");
+    expect(region).not.toHaveAttribute("data-chapter-still");
     expect(region.querySelector("[aria-hidden], [inert]")).toBeNull();
+    expect(screen.getByRole("button", { name: "Open cover letter" })).toBeVisible();
     const wheel = new WheelEvent("wheel", { deltaY: 320, bubbles: true, cancelable: true });
     expect(region.dispatchEvent(wheel)).toBe(true);
     expect(wheel.defaultPrevented).toBe(false);
   });
 
-  it("allows expanded content to grow beyond a screen and preserves keyboard focus", () => {
+  it("never transforms the chapter's own text", () => {
+    scroll.current!.set(0.1);
     chapter();
-    const region = screen.getByRole("region", { name: "Your experience" });
-    const button = screen.getByRole("button", { name: "Open resume" });
-    button.focus();
-    act(() => { contentHeight = 820; resize(); });
-
-    expect(region).toHaveAttribute("data-chapter-layout", "flow");
-    expect(button).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Open cover letter" })).toBeVisible();
-    expect(region).not.toHaveAttribute("data-chapter-still");
-
-    act(() => { contentHeight = 500; resize(); });
-    expect(region).toHaveAttribute("data-chapter-layout", "screen");
-    expect(button).toHaveFocus();
+    const heading = screen.getByRole("heading", { name: "Your experience" });
+    for (let node: HTMLElement | null = heading; node && node.tagName !== "SECTION"; node = node.parentElement) {
+      expect(node.style.transform).toBe("");
+    }
   });
 
-  it.each(["small screen", "reduced motion"])("keeps normal flow for %s", mode => {
+  it("drifts decorative layers by translation only, resting when the chapter is centred", async () => {
+    scroll.current!.set(0.1);
+    chapter();
+    const entering = layer().style.transform;
+    expect(entering).toMatch(/translateY\(/);
+    expect(entering).not.toMatch(/rotate|scale|perspective|translateZ|translate3d/);
+
+    act(() => scroll.current!.set(0.5));
+    await nextFrame();
+    expect(layer().style.transform).toMatch(/^(none|translateY\(0px\))?$/);
+
+    act(() => scroll.current!.set(0.9));
+    await nextFrame();
+    expect(layer().style.transform).toMatch(/translateY\(-/);
+  });
+
+  it("keeps the closing chapter's layers at rest as the page ends", () => {
+    scroll.current!.set(0.95);
+    chapter(true);
+    expect(screen.getByRole("region", { name: "Your experience" })).toHaveAttribute("data-chapter-closing", "true");
+    expect(layer().style.transform).not.toMatch(/translateY\(-/);
+  });
+
+  it.each(["small screen", "reduced motion"])("holds every layer still for %s", mode => {
     if (mode === "small screen") desktop = false;
     else reduced = true;
+    scroll.current!.set(0.1);
     chapter();
     const region = screen.getByRole("region", { name: "Your experience" });
-    expect(region).toHaveAttribute("data-chapter-layout", "flow");
     expect(region).toHaveAttribute("data-chapter-still", "true");
-    expect(screen.getByRole("button", { name: "Open resume" }).parentElement).toHaveStyle({ transform: "none" });
+    expect(layer()).toHaveStyle({ transform: "none" });
   });
 
-  it("does not reset an entering chapter on hover and holds its current pose during keyboard use", () => {
-    scroll.current!.set(0.2);
-    chapter(true);
-    const region = screen.getByRole("region", { name: "Your experience" });
-    const camera = region.firstElementChild!.firstElementChild!;
-    const resume = screen.getByRole("button", { name: "Open resume" });
-    const letter = screen.getByRole("button", { name: "Open cover letter" });
-    fireEvent.pointerEnter(camera, { pointerType: "mouse" });
-    expect(region).not.toHaveAttribute("data-chapter-still");
-    const enteringPose = (camera as HTMLElement).style.transform;
-    fireEvent.pointerMove(resume, { pointerType: "mouse" });
-    expect(region).not.toHaveAttribute("data-chapter-still");
-    expect((camera as HTMLElement).style.transform).toBe(enteringPose);
-    fireEvent.pointerLeave(camera, { pointerType: "mouse" });
-    expect(region).not.toHaveAttribute("data-chapter-still");
-
-    act(() => resume.focus());
-    expect(region).toHaveAttribute("data-chapter-still", "true");
-    expect((camera as HTMLElement).style.transform).toBe(enteringPose);
-    act(() => scroll.current!.set(0.65));
-    expect((camera as HTMLElement).style.transform).toBe(enteringPose);
-    act(() => letter.focus());
-    expect(region).toHaveAttribute("data-chapter-still", "true");
-    expect(letter).toHaveFocus();
-    act(() => screen.getByRole("button", { name: "Continue outside" }).focus());
-    expect(region).not.toHaveAttribute("data-chapter-still");
-  });
-
-  it("pauses all layer transforms without changing chapter size or mounted content", () => {
-    const content = <ScrollChapter labelledBy="pause-heading"><h2 id="pause-heading">Pause example</h2><DepthLayer><button>Keep my place</button></DepthLayer></ScrollChapter>;
+  it("pauses layer motion without changing mounted content or focus", async () => {
+    scroll.current!.set(0.1);
+    const content = <ScrollChapter labelledBy="pause-heading"><h2 id="pause-heading">Pause example</h2><DepthLayer><figure>Illustration</figure></DepthLayer><button>Keep my place</button></ScrollChapter>;
     const { rerender } = render(<LandingMotionProvider paused={false}>{content}</LandingMotionProvider>);
     const region = screen.getByRole("region", { name: "Pause example" });
     const button = screen.getByRole("button", { name: "Keep my place" });
     button.focus();
-    expect(region).toHaveAttribute("data-chapter-layout", "screen");
-    rerender(<LandingMotionProvider paused>{content}</LandingMotionProvider>);
+    expect(region).not.toHaveAttribute("data-chapter-still");
 
-    expect(region).toHaveAttribute("data-chapter-layout", "screen");
+    rerender(<LandingMotionProvider paused>{content}</LandingMotionProvider>);
     expect(region).toHaveAttribute("data-chapter-still", "true");
-    expect(button.parentElement).toHaveStyle({ transform: "none" });
+    await nextFrame();
+    expect(screen.getByText("Illustration").parentElement).toHaveStyle({ transform: "none" });
     expect(button).toHaveFocus();
   });
 });

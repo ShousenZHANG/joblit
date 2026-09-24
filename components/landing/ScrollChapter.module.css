@@ -3,46 +3,27 @@
   isolation: isolate;
   width: 100%;
   min-width: 0;
-  scroll-margin-top: 104px;
+  scroll-margin-top: 0;
   color: var(--experience-text);
   background: var(--experience-bg);
 }
+/* The top inset clears the sticky navigation when a chapter link lands here. */
 .stage {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  padding-block: 56px;
-  perspective: 1800px;
-}
-.camera {
   display: flow-root;
   width: 100%;
   min-width: 0;
-  transform-origin: 50% 45%;
-  transform-style: preserve-3d;
+  padding-block: clamp(104px, 12vh, 136px) clamp(72px, 9vh, 104px);
 }
-.layer {
-  min-width: 0;
-  width: 100%;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-}
-.chapter[data-chapter-layout="screen"] { min-height: 100svh; scroll-margin-top: 0; }
-.chapter[data-chapter-layout="screen"] > .stage {
-  display: flex;
-  align-items: center;
-  min-height: 100svh;
-  padding-block: 128px 48px;
-}
+.layer { min-width: 0; width: 100%; }
+.chapter:not([data-chapter-still]) .layer { will-change: transform; }
+/* The attribute is set during React's render; this stills a paused layer on
+   the same frame instead of waiting for the next motion update. */
+.chapter[data-chapter-still] .layer { transform: none !important; }
 @media (max-width: 959px), (max-height: 739px) {
-  .stage { padding-block: 40px; perspective: none; }
-  .chapter[data-chapter-layout="screen"] { min-height: 0; scroll-margin-top: 104px; }
-  .chapter[data-chapter-layout="screen"] > .stage { min-height: 0; padding-block: 40px; perspective: none; }
-  .camera, .layer { transform: none !important; }
+  .chapter { scroll-margin-top: 32px; }
+  .stage { padding-block: 72px 56px; }
+  .layer { transform: none !important; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .stage { perspective: none; }
-  .chapter[data-chapter-layout="screen"] { min-height: 0; scroll-margin-top: 104px; }
-  .chapter[data-chapter-layout="screen"] > .stage { min-height: 0; padding-block: 56px; perspective: none; }
-  .camera, .layer { transform: none !important; }
+  .layer { transform: none !important; }
 }

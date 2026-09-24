@@ -10,7 +10,7 @@ import { TailorStep } from "@/app/(app)/jobs/components/tailoring/TailorStep";
 import { useAccessibleTabs } from "@/components/ui/useAccessibleTabs";
 import { DEMO_JOBS, DEMO_PROFILE, DEMO_SKILLS, type DemoJob } from "./ApplicationDemo.data";
 import { useMotionPreference } from "./lib/useMotionPreference";
-import { DepthLayer, ScrollChapter } from "./ScrollChapter";
+import { ScrollChapter } from "./ScrollChapter";
 import styles from "./ApplicationDemo.module.css";
 
 const WORKSPACE_VIEWS = ["jobs", "fetch", "resume"] as const;
@@ -145,15 +145,15 @@ export function ApplicationDemo() {
 
   return (
     <div className={styles.demoRoot}>
-    <ScrollChapter id="demo" className={styles.section} labelledBy={`${id}-title`} interactive>
+    <ScrollChapter id="demo" className={styles.section} labelledBy={`${id}-title`}>
       <div className={styles.demoContent}>
       <header className={styles.sectionHeading}>
         <p className={styles.eyebrow}>{t("eyebrow")}</p>
         <h2 id={`${id}-title`}>{t("title")}</h2>
         <p className={styles.description}>{t("description")}</p>
       </header>
-      <DepthLayer depth={0.5} tilt={-1}>
-      <div className={styles.workspace} role="group" aria-label={t("label")} data-chapter-interactive="">
+      {/* An interactive workspace stays put: controls that drift are harder to hit. */}
+      <div className={styles.workspace} role="group" aria-label={t("label")}>
         <div className={styles.toolbar}>
           <div className={styles.brand}><span className={styles.brandMark} aria-hidden="true">J</span><span>Joblit</span></div>
           <div {...tabs.tabListProps} className={styles.tabs} aria-label={t("navigation")}>
@@ -237,7 +237,6 @@ export function ApplicationDemo() {
         </div>
         <p className={styles.demoDisclaimer}><ShieldCheck size={14} aria-hidden="true" />{t("sampleNote")}</p>
       </div>
-      </DepthLayer>
       <p className={styles.setupNote}>{t("localNote")}</p>
       <p className={styles.srOnly} role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
       </div>

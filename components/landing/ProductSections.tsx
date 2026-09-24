@@ -44,7 +44,7 @@ export function ProductSections() {
               <FeatureText number="02" title={t("features.requirementsTitle")} description={t("features.requirementsDescription")} />
             </div>
           </div>
-          <DepthLayer className={styles.visualLayer} depth={1.2} tilt={-2}>
+          <DepthLayer className={styles.visualLayer} depth={1.2}>
           <figure className={styles.opportunityFigure}>
             <div className={styles.figureTopline}>
               <span className={styles.figureIcon}><ListFilter size={16} aria-hidden="true" /></span>
@@ -74,7 +74,7 @@ export function ProductSections() {
 
       <ScrollChapter id="documents" labelledBy="documents-title" className={styles.chapter}>
         <div className={`${styles.chapterInner} ${styles.featureSpread} ${styles.documentSpread}`}>
-          <DepthLayer className={styles.visualLayer} depth={1.4} tilt={2}>
+          <DepthLayer className={styles.visualLayer} depth={1.4}>
           <figure className={styles.documentFigure}>
             <div className={styles.documentGhost} aria-hidden="true" />
             <div className={styles.resumePaper}>
@@ -111,8 +111,8 @@ export function ProductSections() {
             <p className={styles.eyebrow}>{t("features.organiseEyebrow")}</p>
             <h2 id="organise-title" className={styles.sectionTitle}><EditorialTitle text={t("features.organiseTitle")} accented={useSerifAccent} /></h2>
           </div>
+        {/* Side-by-side cards share a baseline; drifting them apart reads as misalignment. */}
         <div className={styles.supportingFeatures}>
-          <DepthLayer depth={0.9} tilt={-1.5}>
           <div className={styles.supportingFeature}>
             <FeatureText number="05" title={t("features.versionsTitle")} description={t("features.versionsDescription")} />
             <div className={styles.versionsPreview}>
@@ -122,8 +122,6 @@ export function ProductSections() {
               <p className={styles.autosave}><Check size={13} aria-hidden="true" />{t("features.autosaved")}</p>
             </div>
           </div>
-          </DepthLayer>
-          <DepthLayer depth={1.25} tilt={1.5}>
           <div className={styles.supportingFeature}>
             <FeatureText number="06" title={t("features.trackingTitle")} description={t("features.trackingDescription")} />
             <div className={styles.trackingPreview}>
@@ -136,12 +134,11 @@ export function ProductSections() {
               </div>
             </div>
           </div>
-          </DepthLayer>
         </div>
         </div>
       </ScrollChapter>
 
-      <ScrollChapter id="get-started" labelledBy="get-started-title" className={styles.chapter} interactive>
+      <ScrollChapter id="get-started" labelledBy="get-started-title" className={styles.chapter}>
         <div className={`${styles.chapterInner} ${styles.gettingStarted}`}>
         <div className={styles.setupIntro}>
           <p className={styles.eyebrow}>{t("gettingStarted.eyebrow")}</p>
@@ -149,7 +146,6 @@ export function ProductSections() {
           <p className={styles.introDescription}>{t("gettingStarted.description")}</p>
           <p className={styles.setupNote}><ShieldCheck size={18} aria-hidden="true" />{t("gettingStarted.note")}</p>
         </div>
-        <DepthLayer depth={1} tilt={-1}>
         <ol className={styles.setupSteps}>
           {[1, 2, 3].map((step) => (
             <li key={step}>
@@ -162,16 +158,15 @@ export function ProductSections() {
             </li>
           ))}
         </ol>
-        </DepthLayer>
         </div>
       </ScrollChapter>
 
-      <ScrollChapter id="faq" labelledBy="faq-title" className={styles.chapter} interactive>
+      <ScrollChapter id="faq" labelledBy="faq-title" className={styles.chapter}>
         <div className={`${styles.chapterInner} ${styles.faq}`}>
         <div>
           <p className={styles.eyebrow}>{t("faq.eyebrow")}</p>
           <h2 id="faq-title" className={styles.faqTitle}>{t("faq.title")}</h2>
-          <DepthLayer depth={1.1} tilt={-3}>
+          <DepthLayer depth={1.1}>
             <div className={styles.faqVisual} aria-hidden="true">
               <div className={styles.faqSheet}><MessageCircleQuestion size={70} strokeWidth={1.1} /><span /><span /><span /></div>
               <div className={styles.faqSeal}><ShieldCheck size={27} strokeWidth={1.4} /></div>
@@ -189,10 +184,10 @@ export function ProductSections() {
         </div>
       </ScrollChapter>
 
-      <ScrollChapter id="start" labelledBy="final-cta-title" className={`${styles.chapter} ${styles.closingChapter}`} interactive closing>
+      <ScrollChapter id="start" labelledBy="final-cta-title" className={`${styles.chapter} ${styles.closingChapter}`} closing>
         <div className={styles.chapterInner}>
         <div className={styles.finalCta}>
-        <DepthLayer depth={1.3} tilt={-4}><div className={styles.ctaEmblem} aria-hidden="true"><JoblitMark size={34} color="currentColor" ariaLabel={null} /></div></DepthLayer>
+        <DepthLayer depth={1.3}><div className={styles.ctaEmblem} aria-hidden="true"><JoblitMark size={34} color="currentColor" ariaLabel={null} /></div></DepthLayer>
         <p className={styles.eyebrow}>{t("finalCta.eyebrow")}</p>
         <h2 id="final-cta-title" className={styles.ctaTitle}><EditorialTitle text={t("finalCta.title")} accented={useSerifAccent} /></h2>
         <p className={styles.ctaDescription}>{t("finalCta.description")}</p>

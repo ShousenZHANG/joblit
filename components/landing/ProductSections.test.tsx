@@ -24,7 +24,6 @@ describe("ProductSections progressive chapters", () => {
     expect(chapters.map(chapter => chapter.id)).toEqual(ids);
     for (const chapter of chapters) {
       expect(chapter).toHaveAttribute("data-scroll-chapter");
-      expect(chapter).toHaveAttribute("data-chapter-layout", "flow");
       expect(within(chapter).getByRole("heading", { level: 2 })).toBeVisible();
     }
     expect(chapters[5]).toHaveAttribute("data-chapter-closing", "true");

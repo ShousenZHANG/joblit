@@ -1,13 +1,12 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { motion, useMotionValue, useMotionValueEvent, useScroll, useSpring, useTransform, type MotionValue } from "framer-motion";
+import { createContext, useContext, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { motion, useMotionValue, useScroll, useTransform, type MotionValue } from "framer-motion";
 import { useMotionPreference } from "./lib/useMotionPreference";
 import { useLandingMotionPaused } from "./lib/LandingMotion";
 import styles from "./ScrollChapter.module.css";
 
 const desktopQuery = "(min-width: 960px) and (min-height: 740px)";
-const stageAllowance = 176; // 128px top clearance and 48px below the content.
 const subscribeDesktop = (onChange: () => void) => {
   const media = window.matchMedia(desktopQuery);
   media.addEventListener("change", onChange);
@@ -24,70 +23,22 @@ type ScrollChapterProps = {
   labelledBy?: string;
   className?: string;
   children: ReactNode;
-  interactive?: boolean;
   closing?: boolean;
 };
 
-/** One-screen chapters when content fits, with uninterrupted native scrolling. */
-export function ScrollChapter({ id, labelledBy, className, children, interactive = false, closing = false }: ScrollChapterProps) {
+/**
+ * A chapter in normal document flow. Its text never moves: a transformed text
+ * layer loses subpixel antialiasing and re-rasterizes while it scrolls. Only
+ * decorative DepthLayers drift, by translation locked to native scroll.
+ */
+export function ScrollChapter({ id, labelledBy, className, children, closing = false }: ScrollChapterProps) {
   const sectionRef = useRef<HTMLElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
   const desktop = useSyncExternalStore(subscribeDesktop, getDesktop, getServerDesktop);
   const reduced = useMotionPreference();
   const paused = useLandingMotionPaused();
-  const [fits, setFits] = useState(false);
-  const [focused, setFocused] = useState(false);
   const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end start"] });
-  const targetProgress = useMotionValue(scrollYProgress.get());
-  const progress = useSpring(targetProgress, { stiffness: 240, damping: 38, restDelta: 0.0005 });
-  const enhanced = desktop && !reduced;
-  const fullScreen = enhanced && fits;
-  const enabled = enhanced && !paused;
-  const held = interactive && focused;
-  const moving = enabled && !held;
-
-  useMotionValueEvent(scrollYProgress, "change", value => {
-    if (!moving) return;
-    targetProgress.set(value);
-    // Offscreen chapters do not need a spring's remaining settling frames.
-    if (value <= 0 || value >= 1) progress.jump(value);
-  });
-  useEffect(() => {
-    if (moving) {
-      const value = scrollYProgress.get();
-      targetProgress.set(value);
-      if (value <= 0 || value >= 1) progress.jump(value);
-      return;
-    }
-    // Focus freezes the current pose instead of snapping controls to a new
-    // position. Pointer hover alone must not alter a scroll-driven scene.
-    const value = enabled ? progress.get() : scrollYProgress.get();
-    targetProgress.set(value);
-    progress.jump(value);
-  }, [enabled, moving, progress, scrollYProgress, targetProgress]);
-
-  useEffect(() => {
-    const content = contentRef.current;
-    if (!content) return;
-    const measure = () => {
-      // Layout dimensions ignore the scroll transform, avoiding a resize loop.
-      const height = content.offsetHeight;
-      setFits(height > 0 && height <= window.innerHeight - stageAllowance);
-    };
-    const observer = new ResizeObserver(measure);
-    observer.observe(content);
-    window.addEventListener("resize", measure);
-    measure();
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
-
-  const rotateX = useTransform(progress, [0, 0.42, 0.72, 1], [8, 0, 0, closing ? 0 : -5]);
-  const scale = useTransform(progress, [0, 0.42, 0.72, 1], [0.94, 1, 1, closing ? 1 : 0.98]);
-  const y = useTransform(progress, [0, 0.42, 0.72, 1], [56, 0, 0, closing ? 0 : -24]);
-  const context = useMemo(() => ({ progress, enabled, closing }), [progress, enabled, closing]);
+  const enabled = desktop && !reduced && !paused;
+  const context = useMemo(() => ({ progress: scrollYProgress, enabled, closing }), [scrollYProgress, enabled, closing]);
 
   return <section
     ref={sectionRef}
@@ -95,46 +46,36 @@ export function ScrollChapter({ id, labelledBy, className, children, interactive
     aria-labelledby={labelledBy}
     className={[styles.chapter, className].filter(Boolean).join(" ")}
     data-scroll-chapter=""
-    data-chapter-layout={fullScreen ? "screen" : "flow"}
-    data-chapter-still={!moving ? "true" : undefined}
+    data-chapter-still={enabled ? undefined : "true"}
     data-chapter-closing={closing ? "true" : undefined}
   >
     <div className={styles.stage}>
-      <motion.div
-        ref={contentRef}
-        className={styles.camera}
-        style={{ rotateX, scale, y }}
-        transformTemplate={enabled ? undefined : () => "none"}
-        onFocusCapture={interactive ? () => setFocused(true) : undefined}
-        onBlurCapture={interactive ? event => {
-          if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false);
-        } : undefined}
-      >
-        <ChapterContext.Provider value={context}>{children}</ChapterContext.Provider>
-      </motion.div>
+      <ChapterContext.Provider value={context}>{children}</ChapterContext.Provider>
     </div>
   </section>;
 }
 
-/** A small relative depth, driven by its chapter's one shared scroll signal. */
-export function DepthLayer({ children, className, depth = 1, tilt = 0 }: {
+/**
+ * Decorative parallax for illustrations. Translation only, mapped directly to
+ * scroll with no spring, so the layer never lags behind the page. It rests at
+ * zero when its chapter is centred. Never wrap controls in it: a target that
+ * drifts under the pointer is harder to hit.
+ */
+export function DepthLayer({ children, className, depth = 1 }: {
   children: ReactNode;
   className?: string;
   depth?: number;
-  tilt?: number;
 }) {
   const chapter = useContext(ChapterContext);
   const fallback = useMotionValue(0.5);
   const progress = chapter?.progress ?? fallback;
-  const amount = Math.min(2, Math.max(-2, depth));
-  const angle = Math.min(8, Math.max(-8, tilt));
-  const y = useTransform(progress, [0, 0.42, 0.72, 1], [24 * amount, 0, 0, chapter?.closing ? 0 : -16 * amount]);
-  const z = useTransform(progress, [0, 0.42, 0.72, 1], [-32 * amount, 0, 0, chapter?.closing ? 0 : -16 * amount]);
-  const rotateY = useTransform(progress, [0, 0.42, 0.72, 1], [angle, 0, 0, chapter?.closing ? 0 : -angle * 0.5]);
+  const travel = 28 * Math.min(2, Math.max(0, depth));
+  // The final chapter never scrolls fully out of view, so it keeps its rest pose.
+  const y = useTransform(progress, [0, 0.5, 1], [travel, 0, chapter?.closing ? 0 : -travel]);
 
   return <motion.div
     className={[styles.layer, className].filter(Boolean).join(" ")}
-    style={{ y, z, rotateY }}
+    style={{ y }}
     transformTemplate={chapter?.enabled ? undefined : () => "none"}
   >{children}</motion.div>;
 }
