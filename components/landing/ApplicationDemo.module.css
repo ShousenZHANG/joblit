@@ -225,8 +225,14 @@
 .dialogFooter { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 26px; border-top: 1px solid var(--demo-border); background: var(--demo-panel); }
 .dialogFooter > p { max-width: 500px; color: var(--demo-muted); font-size: 11px; line-height: 1.7; }
 .dialogFooter > button { flex-shrink: 0; }
+/* Radix keeps the dialog mounted until a changed animation ends, so closing
+   answers the action instead of cutting to the page. */
+.dialogOverlay[data-state="closed"] { animation: overlay-exit .14s ease-in forwards; }
+.dialog[data-state="closed"] { animation: dialog-exit .14s ease-in forwards; }
 @keyframes overlay-enter { from { opacity: 0; } to { opacity: 1; } }
-@keyframes dialog-enter { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes overlay-exit { from { opacity: 1; } to { opacity: 0; } }
+@keyframes dialog-enter { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.985); } to { opacity: 1; transform: translate(-50%, -50%); } }
+@keyframes dialog-exit { from { opacity: 1; transform: translate(-50%, -50%); } to { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.985); } }
 
 @media (max-width: 1050px) {
   .demoContent { width: calc(100% - 64px); }
