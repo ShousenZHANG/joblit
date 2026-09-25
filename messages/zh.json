@@ -724,182 +724,64 @@
     }
   },
   "landingExperience": {
-    "pageNavigation": {
-      "label": "页面章节导航",
-      "overview": "认识 Joblit",
-      "workflow": "申请流程",
-      "demo": "体验演示",
-      "features": "发现职位",
-      "documents": "申请材料",
-      "organise": "有序管理",
-      "get-started": "配置本地 AI",
-      "faq": "常见问题",
-      "start": "开始使用"
-    },
     "nav": {
       "primary": "主导航",
       "home": "Joblit 首页",
-      "workflow": "工作流程",
-      "features": "产品功能",
+      "howItWorks": "工作方式",
+      "demo": "演示",
       "faq": "常见问题",
-      "demo": "体验演示",
-      "workspace": "进入工作台",
-      "github": "在 GitHub 查看源码",
+      "github": "在 GitHub 查看",
       "openMenu": "打开菜单",
-      "closeMenu": "关闭菜单",
-      "language": "切换语言",
-      "skip": "跳转到正文"
+      "closeMenu": "关闭菜单"
     },
     "hero": {
-      "eyebrow": "让你的澳洲求职，井然有序",
-      "title1": "下一段职业旅程，",
-      "title2": "在这里展开。",
-      "description": "发现澳洲职位，让真实经历成为申请的亮点，清楚掌握每一步进展。这是为你准备的个人求职工作台。",
-      "primary": "体验演示",
-      "secondary": "进入工作台",
-      "proof1": "专注澳洲职位",
-      "proof2": "基于你的真实经历",
-      "proof3": "开放源码",
-      "scroll": "向下滚动，看流程逐步展开",
-      "pause": "暂停动态效果",
-      "resume": "恢复动态效果",
-      "sceneLabel": "三维求职工作站，将职位机会、个人简历与申请材料连接在一起"
+      "titleLead": "为职位定制，",
+      "titleClaim": "忠于你的简历。",
+      "description": "Joblit 汇集澳大利亚 LinkedIn 职位，列出每个职位的要求，并据此调整你的简历。技能按编号从你自己的档案中挑选，所以不会加上你没有的技能；你的工作经历也从不改写。",
+      "secondary": "试用演示",
+      "note": "免费且开源。生成在你自己的电脑上、用你自己的模型账号运行。"
     },
-    "story": {
-      "eyebrow": "从发现机会，到准备申请",
-      "title": "让下一步，变得清晰。",
-      "description": "三个相连的步骤。滚动探索，或直接选择一步。",
-      "navigation": "探索申请流程",
-      "continue": "继续向下探索",
-      "skip": "体验演示",
+    "proof": {
+      "label": "定制简历如何始终基于你的档案",
+      "jobAd": "招聘广告原文",
+      "technologies": "招聘广告中的技术",
+      "modelPicks": "模型挑选的内容",
+      "modelNote": "是你列表中的位置，不是技能名称",
+      "yourSkills": "你的技能",
+      "selected": "已选",
+      "resume": "你的简历",
+      "resumeSkills": "技能",
+      "resumeExperience": "工作经历",
+      "experienceKept": "保持你写的原样",
+      "example": "示例数据，与下方演示相同。"
+    },
+    "howItWorks": {
+      "title": "从一条职位信息，到一份可以投出的申请。",
+      "description": "三个步骤，都在同一个工作台里完成。发出去的内容由你决定。",
       "steps": [
         {
-          "label": "发现",
-          "title": "让值得关注的机会浮现。",
-          "description": "集中查看澳洲 LinkedIn 职位，了解经验要求，直接回到职位描述中的原文。"
+          "title": "找到值得投入的职位",
+          "description": "把澳大利亚 LinkedIn 职位汇集到一个列表，公司、地点和资历一目了然。每个职位都标出经验要求，并链接回原文句子。"
         },
         {
-          "label": "定制",
-          "title": "让你的经历，切中岗位。",
-          "description": "将职位与你的简历连接，调整个人摘要，突出你已经具备的相关技能。"
+          "title": "定制你的简历",
+          "description": "摘要会针对职位重写，最相关的技能从你自己的档案中挑选。雇主、日期和工作经历保持你写的原样。"
         },
         {
-          "label": "准备",
-          "title": "把机会，变成准备好的申请。",
-          "description": "生成简历和求职信，检查细节，下载整洁的 PDF，并持续记录申请进展。"
+          "title": "检查、导出、投递",
+          "description": "阅读定制后的简历和求职信，下载排版好的 PDF，然后自己到雇主网站投递。把职位标记为“已申请”，方便跟进。"
         }
       ],
-      "illustrative": "效果示意",
-      "requiredExperience": "所需经验",
-      "experienceExample": "3 年以上",
-      "existingSkills": "来自已有档案的技能",
-      "documents": "你的申请材料"
-    },
-    "features": {
-      "eyebrow": "围绕你的下一步而设计",
-      "title": "少一点忙乱，\n多一点专注。",
-      "description": "从发现感兴趣的职位，到准备好申请材料，让每个细节都有合适的位置。",
-      "discoveryTitle": "澳洲职位，集中掌握。",
-      "discoveryDescription": "把 LinkedIn 职位带入工作台，一起查看岗位、公司、地点与经验层级。",
-      "requirementsTitle": "看清岗位，真正需要什么。",
-      "requirementsDescription": "查看所需经验，直接定位到职位描述原文。带着完整上下文，做出自己的判断。",
-      "tailoringTitle": "真实的经历，更贴合的表达。",
-      "tailoringDescription": "按岗位调整个人摘要，选出已有档案中的相关技能。职业经历始终属于你，AI 不会重写你的经历。",
-      "pdfTitle": "让申请，有一个漂亮的收尾。",
-      "pdfDescription": "生成针对岗位的简历和求职信，检查结果，再下载排版整洁的 LaTeX PDF。",
-      "documentsEyebrow": "从真实经历，到这份申请",
-      "documentsTitle": "让你的经历，\n成为更贴合的申请。",
-      "organiseEyebrow": "跟得上你的每一步",
-      "organiseTitle": "不同方向，\n都有清晰进展。",
-      "versionsTitle": "让档案，随你的方向成长。",
-      "versionsDescription": "为不同求职方向保留简历版本。编辑自动保存，让你专注打磨个人档案。",
-      "trackingTitle": "每份申请，都有清晰进展。",
-      "trackingDescription": "在「新职位」「已申请」「已拒绝」间更新状态，让求职过程始终有迹可循。",
-      "previewLabel": "产品界面示意",
-      "workspaceTitle": "完整上下文，清晰的机会",
-      "roleTitle": "全栈工程师",
-      "roleMeta": "澳大利亚悉尼 · 全职",
-      "experienceLabel": "所需经验",
-      "experienceValue": "3 年以上",
-      "sourceLabel": "职位描述原文",
-      "sourceQuote": "“具备 3 年以上 Web 应用开发与维护经验。”",
-      "resumeLabel": "岗位定制简历",
-      "resumeName": "Alex Morgan",
-      "resumeRole": "软件工程师",
-      "summaryLabel": "个人摘要",
-      "summaryText": "使用 React、TypeScript 与云平台，构建注重用户体验的 Web 应用的软件工程师。",
-      "skillsLabel": "相关技能",
-      "experienceUnchanged": "完整保留你的原始经历",
-      "documentReady": "简历 + 求职信",
-      "pdfBadge": "PDF",
-      "versionLabel": "简历版本",
-      "versionGeneral": "通用档案",
-      "versionEngineering": "软件工程方向",
-      "autosaved": "修改已保存",
-      "newStatus": "新职位",
-      "appliedStatus": "已申请",
-      "rejectedStatus": "已拒绝",
-      "trackingLabel": "每个下一步，都有位置"
-    },
-    "gettingStarted": {
-      "eyebrow": "从属于你的经历开始",
-      "title": "带上真实经历，\n准备下一步。",
-      "description": "无需登录，即可体验演示。准备好后，进入工作台，建立你的个人档案。",
-      "step1Title": "建立你的工作台",
-      "step1Description": "使用 Google 或 GitHub 登录，添加你的简历档案。",
-      "step2Title": "发现下一份机会",
-      "step2Description": "获取澳洲职位，选出值得投入的方向。",
-      "step3Title": "连接本地 AI 生成",
-      "step3Description": "目前，定制生成需要在你自己的电脑上配置并运行 Hermes，使用你自己的模型账号。生成材料前，请先完成设置指南。",
-      "setupLink": "查看生成设置指南",
-      "note": "演示使用示例数据。实际生成需要完成你自己的配置。"
-    },
-    "faq": {
-      "eyebrow": "开始之前，你可能想了解",
-      "title": "把问题，也想清楚。",
-      "items": [
-        {
-          "question": "Joblit 适合谁？",
-          "answer": "Joblit 是面向澳洲求职者的个人工作台，重点支持技术与知识型岗位。目前，职位获取支持澳大利亚的 LinkedIn 职位。"
-        },
-        {
-          "question": "配置 AI 之前，可以先体验吗？",
-          "answer": "可以。交互演示使用示例职位和申请内容，无需登录或连接模型。在工作台生成自己的材料时，需要先建立简历档案，并在电脑上配置 Hermes。"
-        },
-        {
-          "question": "AI 会修改简历的哪些部分？",
-          "answer": "简历定制可以调整个人摘要，并从已有档案中选择相关技能，不会重写你的职业经历。你也可以生成求职信，并在使用前检查生成内容。"
-        },
-        {
-          "question": "Joblit 会自动帮我投递吗？",
-          "answer": "不会。Joblit 帮你发现职位、准备材料并记录申请状态。你检查材料后，自行前往雇主或招聘平台提交申请。"
-        }
-      ]
-    },
-    "finalCta": {
-      "eyebrow": "下一段旅程，从这里开始",
-      "title": "让你的求职，\n在这里有序展开。",
-      "description": "一个工作台，放下你的机会、真实经历，以及想要递出的那份申请。",
-      "primary": "进入你的工作台",
-      "secondary": "先体验演示"
-    },
-    "footer": {
-      "tagline": "让方向更清晰，\n让下一步更从容。",
-      "product": "探索产品",
-      "workspace": "工作台",
-      "demo": "交互演示",
-      "setup": "生成设置",
-      "project": "开源项目",
-      "source": "源代码",
-      "issue": "反馈问题",
-      "legal": "法律信息",
-      "privacy": "隐私政策",
-      "terms": "服务条款",
-      "copyright": "© Joblit 贡献者。",
-      "note": "开放源码，为下一段旅程而构建。"
+      "requirement": "经验要求",
+      "showSource": "在原文中查看",
+      "changed": "针对该职位重写",
+      "summary": "摘要",
+      "skills": "技能，从你的列表中挑选",
+      "kept": "保持你写的原样",
+      "experience": "工作经历",
+      "employers": "雇主与日期"
     },
     "demo": {
-      "eyebrow": "亲手体验，真实流程",
       "title": "从一份职位，开始下一次申请。",
       "description": "查看职位、定位要求，再打开 Tailor。沿用 Joblit 的实际操作流程，以虚构履历和准备好的示例材料体验。",
       "label": "交互式产品演示",
@@ -994,6 +876,90 @@
       "restoreSamples": "恢复示例职位",
       "reviewLocked": "打开生成结果示例后，可检查预置的摘要、所选技能或求职信。",
       "publishLocked": "示例包含已准备好的 PDF，可打开文件查看发布结果。"
+    },
+    "yourModel": {
+      "title": "你的模型，你的电脑。",
+      "description": "生成通过你自己电脑上的 Hermes、使用你自己的模型账号完成。Joblit 服务器保存你的档案、职位和 PDF，但不持有任何模型密钥，也从不自己生成文字。",
+      "diagramLabel": "生成过程如何在你的浏览器、你的电脑和 Joblit 服务器之间流转",
+      "browser": "浏览器中的 Joblit",
+      "browserNote": "你在这里检查并确认所有内容。",
+      "hermes": "你电脑上的 Hermes",
+      "hermesNote": "根据你当前的档案生成提示词并运行。",
+      "account": "你的模型账号",
+      "accountNote": "你的订阅，你的用量。",
+      "drafts": "草稿与 PDF",
+      "server": "Joblit 服务器",
+      "serverNote": "保存你的档案、职位和生成好的 PDF。",
+      "noKey": "不存模型密钥，不生成文字。"
+    },
+    "details": {
+      "title": "求职的其余部分，也井井有条。",
+      "requirementsTitle": "有出处的职位要求",
+      "requirementsDescription": "经验和技术要求直接来自职位描述，每一条都链接回原文句子。",
+      "requirementLabel": "经验要求",
+      "statusTitle": "每个职位一个状态",
+      "statusDescription": "在“新职位”“已申请”“已拒绝”之间切换，随时知道哪些还在等你处理。",
+      "versionsTitle": "简历版本",
+      "versionsDescription": "为每个求职方向保留一个版本，编辑会自动保存。",
+      "versionGeneral": "通用",
+      "versionEngineering": "软件工程",
+      "saved": "已保存",
+      "languagesTitle": "中英文双语",
+      "languagesDescription": "工作台可以用任一语言，简历也可以各存一份，都能导出排版好的 PDF。",
+      "languageEnglish": "英文",
+      "languageChinese": "中文"
+    },
+    "gettingStarted": {
+      "title": "从你自己的简历开始。",
+      "description": "无需登录，即可体验演示。准备好后，进入工作台，建立你的个人档案。",
+      "step1Title": "建立你的工作台",
+      "step1Description": "使用 Google 或 GitHub 登录，添加你的简历档案。",
+      "step2Title": "发现下一份机会",
+      "step2Description": "获取澳洲职位，选出值得投入的方向。",
+      "step3Title": "连接本地 AI 生成",
+      "step3Description": "目前，定制生成需要在你自己的电脑上配置并运行 Hermes，使用你自己的模型账号。生成材料前，请先完成设置指南。",
+      "setupLink": "查看生成设置指南",
+      "note": "演示使用示例数据。实际生成需要完成你自己的配置。"
+    },
+    "faq": {
+      "title": "常见问题解答。",
+      "items": [
+        {
+          "question": "Joblit 适合谁？",
+          "answer": "Joblit 是面向澳洲求职者的个人工作台，重点支持技术与知识型岗位。目前，职位获取支持澳大利亚的 LinkedIn 职位。"
+        },
+        {
+          "question": "配置 AI 之前，可以先体验吗？",
+          "answer": "可以。交互演示使用示例职位和申请内容，无需登录或连接模型。在工作台生成自己的材料时，需要先建立简历档案，并在电脑上配置 Hermes。"
+        },
+        {
+          "question": "AI 会修改简历的哪些部分？",
+          "answer": "简历定制可以调整个人摘要，并从已有档案中选择相关技能，不会重写你的职业经历。你也可以生成求职信，并在使用前检查生成内容。"
+        },
+        {
+          "question": "Joblit 会自动帮我投递吗？",
+          "answer": "不会。Joblit 帮你发现职位、准备材料并记录申请状态。你检查材料后，自行前往雇主或招聘平台提交申请。"
+        }
+      ]
+    },
+    "closing": {
+      "title": "下一份申请，由你自己的经历写成。",
+      "description": "带上你的简历，选一个职位，投出一份你能为之负责的申请。",
+      "secondary": "先试用演示"
+    },
+    "footer": {
+      "tagline": "为澳大利亚求职打造的工作台，开源构建。",
+      "product": "产品",
+      "workspace": "工作台",
+      "demo": "演示",
+      "setup": "生成设置",
+      "project": "项目",
+      "source": "源代码",
+      "issue": "报告问题",
+      "legal": "法律",
+      "privacy": "隐私",
+      "terms": "条款",
+      "copyright": "© Joblit 贡献者。"
     }
   }
 }

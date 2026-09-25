@@ -1,0 +1,29 @@
+.closing { border-top: 1px solid var(--rule); }
+.title {
+  max-width: 16ch;
+  font-family: var(--font-display);
+  font-variation-settings: "wdth" 80;
+  font-size: clamp(40px, 6vw, 84px);
+  font-weight: 620;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.title:lang(zh) { max-width: 18em; font-size: clamp(34px, 4.6vw, 64px); line-height: 1.18; letter-spacing: 0; }
+.description { margin-top: 24px; }
+.actions { margin-top: 36px; }
+
+.footer { padding-block: 56px 36px; border-top: 1px solid var(--rule); background: var(--sunk); }
+.columns { display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 32px; }
+.wordmark { display: inline-flex; align-items: center; gap: 9px; min-height: 44px; font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
+.mark { display: inline-flex; color: var(--emerald-fill); }
+.tagline { max-width: 32ch; margin-top: 8px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.columnTitle { margin-bottom: 6px; font-size: 13px; font-weight: 600; }
+.column a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--muted); font-size: 14px; transition: color 0.15s ease; }
+.column a:hover { color: var(--ink); }
+.bottom { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 13px; }
+
+@media (max-width: 760px) {
+  .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .brand { grid-column: 1 / -1; }
+}

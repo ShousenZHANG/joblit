@@ -42,6 +42,20 @@ describe("landing product claims", () => {
     expect(chinese).toContain("不会重写你的职业经历");
   });
 
+  it("describes skill selection by position and never claims to rewrite experience", () => {
+    expect(en.landingExperience.hero.description).toMatch(/picked by number from your own profile/);
+    expect(en.landingExperience.hero.description).toMatch(/experience is never rewritten/);
+    expect(zh.landingExperience.hero.description).toContain("按编号从你自己的档案");
+    expect(zh.landingExperience.hero.description).toContain("从不改写");
+  });
+
+  it("keeps generation off Joblit's server in both languages", () => {
+    expect(en.landingExperience.yourModel.description).toMatch(/holds no model key/);
+    expect(en.landingExperience.yourModel.noKey).toMatch(/No model key/);
+    expect(zh.landingExperience.yourModel.description).toContain("不持有任何模型密钥");
+    expect(zh.landingExperience.yourModel.noKey).toContain("不存模型密钥");
+  });
+
   it("distinguishes example data from live generation and user-submitted applications", () => {
     expect(en.landingExperience.faq.items[1].answer).toMatch(/example roles/);
     expect(zh.landingExperience.faq.items[1].answer).toContain("示例职位");

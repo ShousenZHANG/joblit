@@ -1,0 +1,54 @@
+.diagram {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr) 56px minmax(0, 1fr);
+  grid-template-areas:
+    "browser toHermes hermes toAccount account"
+    "drafts  .        .      .         .      "
+    "server  server   server .         .      ";
+  align-items: stretch;
+}
+.node {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 20px 22px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.icon { margin-bottom: 8px; color: var(--emerald); }
+.nodeTitle { font-size: 16.5px; font-weight: 620; line-height: 1.35; }
+.nodeNote { max-width: 34ch; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+.link { display: grid; place-items: center; color: var(--muted); }
+.vertical { display: grid; justify-items: center; gap: 4px; padding-block: 12px; color: var(--muted); font-size: 12.5px; text-align: center; }
+.server {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 28px;
+  border-style: dashed;
+  background: var(--sunk);
+}
+.server .icon { display: block; }
+.noKey {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--emerald-wash);
+  color: var(--emerald-ink);
+  font-size: 13.5px;
+  font-weight: 560;
+}
+
+@media (max-width: 899px) {
+  .diagram {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "server" "drafts" "browser" "toHermes" "hermes" "toAccount" "account";
+  }
+  .link { padding-block: 10px; }
+  .link svg { transform: rotate(90deg); }
+}

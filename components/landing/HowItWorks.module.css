@@ -1,0 +1,83 @@
+/* Steps share row tracks, so frames match in height and titles sit on one line. */
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: clamp(24px, 3.2vw, 44px); row-gap: 0; }
+.step { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: 12px; min-width: 0; }
+.visualFrame { display: grid; }
+.title { display: flex; align-items: baseline; gap: 12px; margin-top: 14px; font-size: 20px; font-weight: 620; line-height: 1.3; letter-spacing: -0.01em; }
+.number {
+  flex: none;
+  color: var(--emerald);
+  font-family: var(--font-display);
+  font-variation-settings: "wdth" 80;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.text { max-width: 40ch; color: var(--ink-soft); font-size: 15.5px; line-height: 1.6; }
+
+/* Each step shows the product state it describes; the three share one frame. */
+.visual {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  height: 100%;
+  min-height: 212px;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.role {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.role[data-selected] { border-color: color-mix(in srgb, var(--emerald) 35%, var(--rule)); background: color-mix(in srgb, var(--emerald-wash) 55%, var(--surface)); }
+.roleTitle { overflow: hidden; font-size: 13.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.roleMeta { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.badge { align-self: start; padding: 1px 8px; border-radius: 999px; background: var(--emerald-wash); color: var(--emerald-ink); font-size: 11.5px; font-weight: 550; }
+.requirement {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: baseline;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--sunk);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.requirement strong { color: var(--ink); font-size: 17px; font-weight: 620; }
+.source { grid-column: 1 / -1; color: var(--emerald); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+
+.groupLabel { display: flex; align-items: center; gap: 7px; margin-top: 2px; color: var(--muted); font-size: 12.5px; font-weight: 550; }
+.groupLabel:not(:first-child) { margin-top: 8px; }
+.item { padding: 8px 12px; border-radius: 9px; font-size: 13.5px; }
+.item[data-kind="changed"] { background: var(--emerald-wash); color: var(--emerald-ink); }
+.item[data-kind="kept"] { background: var(--sunk); color: var(--ink-soft); }
+
+.file { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--rule); border-radius: 10px; font-size: 13.5px; }
+.file svg { color: var(--emerald); }
+.fileType { margin-left: auto; padding: 1px 6px; border-radius: 5px; background: var(--sunk); color: var(--muted); font-size: 11px; font-weight: 600; }
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  margin-top: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 13px;
+}
+.statusDot { width: 7px; height: 7px; border-radius: 50%; background: #1d6fd6; }
+:global(.dark) .statusDot { background: #83baff; }
+
+@media (max-width: 899px) {
+  .steps { grid-template-columns: minmax(0, 1fr); row-gap: 56px; }
+  .visual { min-height: 0; }
+}

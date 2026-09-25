@@ -1,0 +1,35 @@
+.layout { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(32px, 6vw, 96px); align-items: start; }
+.items { border-top: 1px solid var(--rule); }
+.item { border-bottom: 1px solid var(--rule); }
+.question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 72px;
+  padding-block: 20px;
+  font-size: 17px;
+  font-weight: 580;
+  line-height: 1.45;
+  list-style: none;
+  cursor: pointer;
+}
+.question::-webkit-details-marker { display: none; }
+.question svg { flex: none; color: var(--muted); transition: transform 0.25s ease, color 0.15s ease; }
+.item[open] .question svg { transform: rotate(45deg); color: var(--emerald); }
+.question:hover svg { color: var(--ink); }
+.answer { max-width: 62ch; padding: 0 40px 24px 0; color: var(--ink-soft); font-size: 16px; line-height: 1.7; }
+
+/* Engines that expose the disclosure's content box ease it open and closed;
+   the others keep the native instant toggle. */
+.item { interpolate-size: allow-keywords; }
+.item::details-content { height: 0; overflow: clip; transition: height 0.32s cubic-bezier(0.22, 1, 0.36, 1), content-visibility 0.32s allow-discrete; }
+.item[open]::details-content { height: auto; }
+@media (prefers-reduced-motion: reduce) {
+  .item::details-content { transition: none; }
+}
+
+@media (max-width: 899px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .answer { padding-right: 0; }
+}

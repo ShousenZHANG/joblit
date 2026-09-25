@@ -1,4 +1,14 @@
+import { Instrument_Sans } from "next/font/google";
 import { getTranslations } from "next-intl/server";
+
+// Display face for marketing headlines only. The width axis is loaded so
+// headings can run condensed; body copy stays in the product's Geist.
+const display = Instrument_Sans({
+  subsets: ["latin"],
+  axes: ["wdth"],
+  variable: "--font-landing-display",
+  display: "swap",
+});
 
 export default async function MarketingLayout({
   children,
@@ -8,7 +18,7 @@ export default async function MarketingLayout({
   const t = await getTranslations("marketing");
 
   return (
-    <div className="contents">
+    <div className={`contents ${display.variable}`}>
       {/* Skip link — first focusable element so keyboard/screen-reader users can
           jump past the sticky nav straight to the page content. Visually hidden
           until focused. */}

@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { getLocale } from "next-intl/server";
-import { ImmersiveLanding } from "@/components/landing/ImmersiveLanding";
+import { Landing } from "@/components/landing/Landing";
 
 const copy = {
   en: {
-    title: "Your next role starts here",
-    description: "Your Australian job search, in one workspace. Discover roles, tailor your resume from your real experience, and prepare your next application with Joblit.",
+    title: "Tailored to the role. True to your résumé.",
+    description: "Your Australian job search in one workspace. Find roles, see what each one asks for, and tailor your résumé using only the skills and experience you already have.",
   },
   zh: {
-    title: "下一份理想工作，从这里开始",
-    description: "面向澳洲求职的个人工作台。发现职位、基于真实履历定制简历与求职信，整理每一次申请。",
+    title: "为职位定制，忠于你的简历。",
+    description: "面向澳洲求职的个人工作台。发现职位、看清每个职位的要求，只用你已有的技能和经历来定制简历。",
   },
 };
 
@@ -33,6 +33,6 @@ export default async function MarketingPage() {
   };
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-    <ImmersiveLanding />
+    <Landing />
   </>;
 }
