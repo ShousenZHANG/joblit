@@ -21,8 +21,6 @@
       "@radix-ui/react-select",
       "@radix-ui/react-slot",
       "@radix-ui/react-toast",
-      "@react-three/drei",
-      "@react-three/fiber",
       "@tanstack/react-query",
       "@tanstack/react-virtual",
       "@vercel/blob",
@@ -46,7 +44,6 @@
       "rehype-highlight",
       "remark-gfm",
       "tailwind-merge",
-      "three",
       "zod"
     ],
     "devDependencies": [
@@ -59,7 +56,6 @@
       "@types/node",
       "@types/react",
       "@types/react-dom",
-      "@types/three",
       "@vitest/coverage-v8",
       "axe-core",
       "dotenv",
