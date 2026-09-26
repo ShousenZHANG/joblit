@@ -1,4 +1,4 @@
-.hero { padding-block: clamp(40px, 5vw, 72px) var(--section-space); }
+.hero { padding-block: clamp(32px, 4vw, 60px) var(--section-space); }
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
@@ -19,6 +19,19 @@
 .description { max-width: 54ch; margin-top: 28px; color: var(--ink-soft); font-size: clamp(17px, 1.35vw, 19.5px); line-height: 1.6; }
 .actions { margin-top: 36px; }
 .note { max-width: 46ch; margin-top: 18px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+/* The page's opening: the claim rises line by line, then its support settles
+   in while the proof beside it runs. Opacity starts just above zero so the
+   headline still counts as painted content from the first frame. */
+@media (prefers-reduced-motion: no-preference) {
+  .line { animation: rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .line + .line { animation-delay: 0.09s; }
+  .description { animation: settle 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both; }
+  .actions { animation: settle 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both; }
+  .note { animation: settle 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.38s both; }
+}
+@keyframes rise { from { opacity: 0.01; transform: translateY(0.32em); } }
+@keyframes settle { from { opacity: 0.01; transform: translateY(12px); } }
 
 @media (max-width: 899px) {
   .hero { padding-top: 40px; }

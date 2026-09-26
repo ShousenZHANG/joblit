@@ -27,6 +27,7 @@
 .mark { display: inline-flex; color: var(--emerald-fill); }
 .links { display: flex; align-items: center; gap: 2px; }
 .links a {
+  position: relative;
   display: inline-flex;
   align-items: center;
   min-height: 40px;
@@ -38,6 +39,20 @@
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 .links a:hover { color: var(--ink); background: var(--sunk); }
+.links a[aria-current="location"] { color: var(--ink); }
+.links a::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  bottom: 5px;
+  left: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--emerald-fill);
+  transform: scaleX(0);
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.links a[aria-current="location"]::after { transform: scaleX(1); }
 .actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .iconLink {
   display: inline-flex;
@@ -62,8 +77,9 @@
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.15s ease, transform 0.12s ease;
 }
+.cta:active { transform: scale(0.97); }
 .cta:hover { background: color-mix(in srgb, var(--ink) 84%, var(--emerald)); }
 .menuToggle {
   display: none;
@@ -90,6 +106,33 @@
   font-size: 16px;
   font-weight: 500;
 }
+/* Reading progress and the header's lift both follow the page's own scroll
+   timeline, so they cost no script and run off the main thread. */
+.progress { display: none; }
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .header {
+      border-bottom-color: transparent;
+      animation: lift linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 96px;
+    }
+    .progress {
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      display: block;
+      height: 2px;
+      background: var(--emerald-fill);
+      transform-origin: 0 50%;
+      animation: progress linear both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+@keyframes lift { to { border-bottom-color: var(--rule); box-shadow: 0 12px 32px -24px rgb(16 32 27 / 0.45); } }
+@keyframes progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .panelUtilities { display: flex; align-items: center; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--rule); }
 
 @media (max-width: 959px) {

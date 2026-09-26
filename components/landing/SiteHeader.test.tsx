@@ -39,7 +39,33 @@ function mobileMenu() {
 
 describe("SiteHeader interaction", () => {
   beforeEach(() => { session.status = "unauthenticated"; theme.value = "light"; theme.setTheme.mockReset(); setWidth(390); });
-  afterEach(() => { cleanup(); setWidth(originalWidth); vi.restoreAllMocks(); });
+  afterEach(() => { cleanup(); setWidth(originalWidth); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("marks the link for the section under the reading line", () => {
+    // Links observe for prefetching too; deliver only to observers watching the section.
+    const observers: { callback: IntersectionObserverCallback; targets: Element[] }[] = [];
+    vi.stubGlobal("IntersectionObserver", class {
+      private record: { callback: IntersectionObserverCallback; targets: Element[] };
+      constructor(callback: IntersectionObserverCallback) { this.record = { callback, targets: [] }; observers.push(this.record); }
+      observe(target: Element) { this.record.targets.push(target); }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() { return []; }
+    });
+    const cross = (target: Element, isIntersecting: boolean) => act(() => {
+      for (const { callback, targets } of observers) {
+        if (targets.includes(target)) callback([{ target, isIntersecting } as unknown as IntersectionObserverEntry], {} as IntersectionObserver);
+      }
+    });
+    renderHeader();
+    const link = within(screen.getByRole("navigation", { name: nav.primary })).getByRole("link", { name: nav.howItWorks });
+    const section = document.getElementById("how-it-works")!;
+    expect(link).not.toHaveAttribute("aria-current");
+    cross(section, true);
+    expect(link).toHaveAttribute("aria-current", "location");
+    cross(section, false);
+    expect(link).not.toHaveAttribute("aria-current");
+  });
 
   it("opens from the keyboard, reaches menu links, and restores toggle focus on Escape", async () => {
     const user = userEvent.setup();

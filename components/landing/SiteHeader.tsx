@@ -21,6 +21,7 @@ const links = [
 export function SiteHeader() {
   const t = useTranslations("landingExperience.nav");
   const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState<string | null>(null);
   const toggle = useRef<HTMLButtonElement>(null);
   const home = useRef<HTMLAnchorElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -33,6 +34,25 @@ export function SiteHeader() {
     destination?.focus({ preventScroll: true });
     setOpen(false);
   };
+
+  // Mark the section under the reading line. An observer, not a scroll
+  // listener: the browser reports crossings without per-frame work here.
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const sections = links.flatMap(link => {
+      const element = document.getElementById(link.href.slice(1));
+      return element ? [element] : [];
+    });
+    if (!sections.length) return;
+    const crossing = new Map<string, boolean>();
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) crossing.set(entry.target.id, entry.isIntersecting);
+      const active = links.find(link => crossing.get(link.href.slice(1)));
+      setCurrent(active ? active.href : null);
+    }, { rootMargin: "-40% 0px -55% 0px" });
+    for (const section of sections) observer.observe(section);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -64,7 +84,9 @@ export function SiteHeader() {
           Joblit
         </Link>
         <div className={styles.links}>
-          {links.map(link => <a key={link.key} href={link.href}>{t(link.key)}</a>)}
+          {links.map(link => (
+            <a key={link.key} href={link.href} aria-current={current === link.href ? "location" : undefined}>{t(link.key)}</a>
+          ))}
         </div>
         <div className={styles.actions}>
           <div className={styles.desktopOnly}><LocaleSwitcher size="touch" variant="ghost" /></div>
@@ -86,6 +108,7 @@ export function SiteHeader() {
           </button>
         </div>
       </nav>
+      <span className={styles.progress} aria-hidden="true" />
       {open && (
         <div ref={panel} id="landing-mobile-menu" className={styles.panel}>
           <ul className={styles.panelLinks}>

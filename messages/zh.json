@@ -743,6 +743,13 @@
     },
     "proof": {
       "label": "定制简历如何始终基于你的档案",
+      "tryAnother": "换个职位试试",
+      "chooseRole": "示例职位",
+      "roles": {
+        "powerapps": "Power Apps",
+        "fullstack": "全栈",
+        "ai": "AI 系统"
+      },
       "jobAd": "招聘广告原文",
       "technologies": "招聘广告中的技术",
       "modelPicks": "模型挑选的内容",

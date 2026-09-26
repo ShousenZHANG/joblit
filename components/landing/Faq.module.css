@@ -33,3 +33,15 @@
   .layout { grid-template-columns: minmax(0, 1fr); }
   .answer { padding-right: 0; }
 }
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .layout > :first-child, .item {
+      animation: arrive cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-duration: auto;
+      animation-timeline: view();
+      animation-range: entry 0% entry 90%;
+    }
+  }
+}
+@keyframes arrive { from { opacity: 0; transform: translateY(20px); } }

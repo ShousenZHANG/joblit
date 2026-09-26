@@ -109,8 +109,9 @@
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
 }
+.buttonPrimary:active, .buttonSecondary:active { transform: scale(0.97); }
 .buttonPrimary { background: var(--ink); color: var(--paper); border: 1px solid var(--ink); }
 .buttonPrimary:hover { background: color-mix(in srgb, var(--ink) 84%, var(--emerald)); }
 .buttonSecondary { background: transparent; color: var(--ink); border: 1px solid var(--rule-strong); }
@@ -124,3 +125,18 @@
 @media (prefers-reduced-motion: reduce) {
   .page *, .page *::before, .page *::after { transition-duration: 0s !important; animation: none !important; }
 }
+
+/* Sections arrive as they are scrolled to. Progress is bound to the scroll
+   position itself, so it runs off the main thread; engines without scroll
+   timelines show the finished layout. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .sectionHead {
+      animation: arrive cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-duration: auto;
+      animation-timeline: view();
+      animation-range: entry 5% entry 80%;
+    }
+  }
+}
+@keyframes arrive { from { opacity: 0; transform: translateY(28px); } }

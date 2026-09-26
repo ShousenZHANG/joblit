@@ -81,3 +81,25 @@
   .steps { grid-template-columns: minmax(0, 1fr); row-gap: 56px; }
   .visual { min-height: 0; }
 }
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .step {
+      animation: arrive cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-duration: auto;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+    .step:nth-child(2) { animation-range: entry 8% entry 78%; }
+    .step:nth-child(3) { animation-range: entry 16% entry 86%; }
+    /* Inside each frame the product state assembles row by row. */
+    .visual > * {
+      animation: assemble cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-duration: auto;
+      animation-timeline: view();
+      animation-range: entry 30% cover 35%;
+    }
+  }
+}
+@keyframes arrive { from { opacity: 0; transform: translateY(40px); } }
+@keyframes assemble { from { opacity: 0; transform: translateX(-10px); } }

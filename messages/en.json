@@ -743,6 +743,13 @@
     },
     "proof": {
       "label": "How a tailored résumé stays grounded in your profile",
+      "tryAnother": "Try another role",
+      "chooseRole": "Example roles",
+      "roles": {
+        "powerapps": "Power Apps",
+        "fullstack": "Full stack",
+        "ai": "AI systems"
+      },
       "jobAd": "From the job ad",
       "technologies": "Technologies in the job ad",
       "modelPicks": "What the model picks",

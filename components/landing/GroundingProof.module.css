@@ -3,19 +3,64 @@
   --document-muted: #56645e;
   --document-rule: #d8dfdb;
   position: relative;
+  isolation: isolate;
   display: grid;
-  gap: 14px;
+  gap: 12px;
   min-width: 0;
-  padding-left: 30px;
 }
-.proof::before {
+/* Light that follows a mouse pointer; it sits behind the cards. */
+.proof::after {
+  content: "";
+  position: absolute;
+  inset: -28px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(420px circle at var(--spot-x, 60%) var(--spot-y, 40%), color-mix(in srgb, var(--emerald-fill) 13%, transparent), transparent 68%);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.proof:hover::after { opacity: 1; }
+
+.roles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-left: 30px; }
+.rolesLabel { color: var(--muted); font-size: 13px; font-weight: 550; }
+.roleTabs { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--rule); border-radius: 10px; background: var(--sunk); }
+.roleTab {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.roleTab:hover { color: var(--ink); }
+.roleTab[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(16 32 27 / 0.08), 0 0 0 1px var(--rule); }
+.roleTab:focus-visible { outline: 2px solid var(--emerald); outline-offset: 2px; }
+
+.chain { position: relative; display: grid; gap: 12px; min-width: 0; padding-left: 30px; }
+.chain:focus-visible { outline: 2px solid var(--emerald); outline-offset: 6px; border-radius: 12px; }
+.chain::before {
   content: "";
   position: absolute;
   top: 8px;
-  bottom: 44px;
+  bottom: 8px;
   left: 10px;
   width: 1px;
   background: var(--rule-strong);
+}
+.pulse {
+  position: absolute;
+  top: 6px;
+  left: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--emerald-fill);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--emerald-fill) 22%, transparent), 0 0 18px var(--emerald-fill);
+  opacity: 0;
 }
 .step { position: relative; display: grid; gap: 8px; min-width: 0; }
 .step::before {
@@ -103,26 +148,38 @@
 .documentRows dt { color: var(--document-muted); font-size: 12.5px; }
 .documentRows dd { margin: 0; }
 .kept { display: inline-flex; align-items: center; gap: 6px; color: var(--document-muted); }
-.caption { color: var(--muted); font-size: 12.5px; }
+.caption { padding-left: 30px; color: var(--muted); font-size: 12.5px; }
 
-/* One load sequence: evidence is marked, the model answers with positions,
-   those positions light up, and only they reach the résumé. */
+/* One sequence: evidence is marked, the model answers with positions, those
+   positions light up, and only they reach the résumé. A pulse carries the
+   answer down the rail. The first run opens the page; a chosen role replays
+   it in about a second. */
 @media (prefers-reduced-motion: no-preference) {
-  .mark { animation: sweep 0.55s cubic-bezier(0.3, 0.7, 0.2, 1) both; animation-delay: calc(0.35s + var(--order, 0) * 0.18s); }
-  .picks { animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) 1.05s both; }
-  .picksValue { animation: reveal 0.7s steps(var(--chars, 12), end) 1.3s both; }
-  .skill[data-picked] { animation: light 0.45s ease-out both; animation-delay: calc(2.05s + var(--order, 0) * 0.1s); }
-  .chosen { animation: rise 0.45s ease-out 2.55s both; }
+  .chain { --t-mark: 0.35s; --t-mark-step: 0.18s; --t-picks: 1.05s; --t-type: 1.3s; --t-light: 2.05s; --t-light-step: 0.1s; --t-chosen: 2.55s; --t-pulse: 0.3s; --pulse-length: 2.5s; }
+  .chain[data-replay] { --t-mark: 0s; --t-mark-step: 0.08s; --t-picks: 0.28s; --t-type: 0.38s; --t-light: 0.62s; --t-light-step: 0.05s; --t-chosen: 0.88s; --t-pulse: 0s; --pulse-length: 1.05s; }
+
+  .mark { animation: sweep 0.5s cubic-bezier(0.3, 0.7, 0.2, 1) both; animation-delay: calc(var(--t-mark) + var(--order, 0) * var(--t-mark-step)); }
+  .picks { animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) var(--t-picks) both; }
+  .picksValue { animation: reveal 0.6s steps(var(--chars, 12), end) var(--t-type) both; }
+  .skill[data-picked] { animation: light 0.45s ease-out both; animation-delay: calc(var(--t-light) + var(--order, 0) * var(--t-light-step)); }
+  .chosen { animation: rise 0.45s ease-out var(--t-chosen) both; }
+  .pulse { animation: travel var(--pulse-length) cubic-bezier(0.45, 0, 0.2, 1) var(--t-pulse) both; }
 }
 @keyframes sweep { from { background-size: 0% 60%; } }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes reveal { from { clip-path: inset(0 100% 0 0); } }
 @keyframes light { from { background-color: transparent; color: var(--muted); } }
+@keyframes travel {
+  0% { top: 6px; opacity: 0; }
+  8% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { top: calc(100% - 14px); opacity: 0; }
+}
 
 @media (max-width: 420px) {
-  .proof { padding-left: 24px; }
+  .roles, .chain, .caption { padding-left: 24px; }
   .step::before { left: -19px; }
-  .proof::before { left: 8px; }
-  .skills { grid-template-columns: 1fr 1fr; }
+  .chain::before { left: 8px; }
+  .pulse { left: 5px; }
   .documentRows > div { grid-template-columns: 1fr; gap: 2px; }
 }
